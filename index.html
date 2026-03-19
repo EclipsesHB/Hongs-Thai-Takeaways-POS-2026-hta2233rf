@@ -169,7 +169,7 @@ var DEF_ZONES = [
 ];
 
 /* ── RECEIPT PRINTER ── */
-function printReceipt(ord, paperSize) {
+function printReceipt(ord, paperSize, copies) {
   var is58 = paperSize === '58';
   var W = is58 ? 24 : 32;
   var mmSize = is58 ? '58mm' : '80mm';
@@ -177,6 +177,7 @@ function printReceipt(ord, paperSize) {
   var fontSize = is58 ? '11px' : '12px';
   var lineH = is58 ? '1.5' : '1.6';
   var padTop = is58 ? '3mm' : '4mm';
+  var numCopies = parseInt(copies, 10) || 1;
 
   // Inject correct print CSS dynamically
   var styleEl = document.getElementById('receipt-print-style');
@@ -270,7 +271,13 @@ function printReceipt(ord, paperSize) {
   blank();
   blank();
   document.getElementById('receipt-frame').innerHTML = html.join('');
-  window.print();
+  // Print numCopies times with a short delay between each
+  function doPrint(i) {
+    if (i >= numCopies) return;
+    window.print();
+    if (i < numCopies - 1) setTimeout(function(){ doPrint(i + 1); }, 800);
+  }
+  doPrint(0);
 }
 
 /* ── GROUP MENU ITEMS BY VARIANT GROUP ── */
@@ -589,9 +596,13 @@ function MenuEditor(props) {
   var delItem = props.delItem;
   var saveItem = props.saveItem;
   var smInp = props.smInp;
+  var resetMenu = props.resetMenu;
 
   return h('div', null,
-    h('h2', {style:{color:C.accent,margin:'0 0 16px',fontSize:18}}, '🍽️ Menu Editor'),
+    h('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+      h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, '🍽️ Menu Editor'),
+      h('button', {className:'mbtn', onClick:resetMenu, style:{padding:'6px 12px',borderRadius:8,border:'1px solid ' + C.border,background:'transparent',color:C.muted,cursor:'pointer',fontSize:12,fontWeight:600}}, '\u21ba Reset Menu')
+    ),
     h('div', {style:{background:C.card,borderRadius:12,padding:14,marginBottom:18,border:'1px solid ' + C.border}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:10,letterSpacing:1.5}}, 'ADD ITEM'),
       h('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
@@ -891,6 +902,8 @@ function BackupRestore(props) {
   var setOrders = props.setOrders;
   var paperSize = props.paperSize;
   var setPaperSize = props.setPaperSize;
+  var copies = props.copies;
+  var setCopies = props.setCopies;
 
   var msgState = useState(null);
   var msg = msgState[0];
@@ -946,7 +959,7 @@ function BackupRestore(props) {
   return h('div', {style:{padding:4}},
     h('div', {style:{display:'flex',alignItems:'center',gap:10,marginBottom:8}},
       h('span', {style:{fontSize:22}}, '💾'),
-      h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, 'Backup & Restore')
+      h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, 'Settings & Backup')
     ),
     h('p', {style:{fontSize:13,color:C.muted,marginBottom:16}}, 'Save your menu, zones and order history to a file, or restore from a previous backup.'),
 
@@ -971,6 +984,29 @@ function BackupRestore(props) {
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
         paperSize === '58' ? 'Fits 58mm thermal paper — most Android POS terminals' : 'Fits 80mm thermal paper — standard desktop receipt printers'
+      )
+    ),
+    /* Copies selector */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '🖨️ RECEIPT COPIES'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['1','2','3'].map(function(n) {
+          var active = copies === n;
+          return h('button', {
+            key: n, className:'mbtn',
+            onClick: function(){ setCopies(n); },
+            style:{
+              flex:1, padding:'10px 8px', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, n + (n === '1' ? ' copy' : ' copies'));
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
+        'Prints ' + copies + (copies === '1' ? ' receipt' : ' receipts') + ' automatically on every order'
       )
     ),
     h('div', {style:card},
@@ -1024,12 +1060,14 @@ function App() {
   var newZoneState = useState({area:'',price:''}); var newZone = newZoneState[0]; var setNewZone = newZoneState[1];
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
+  var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m3', JSON.stringify(menuItems)); }, [menuItems]);
   useEffect(function(){ localStorage.setItem('hongs_z', JSON.stringify(zones)); }, [zones]);
   useEffect(function(){ localStorage.setItem('hongs_o', JSON.stringify(orders)); }, [orders]);
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
+  useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
   useEffect(function(){ if (orderType !== 'delivery') setSelZone(null); }, [orderType]);
   useEffect(function() {
     function fn() { setIsDesktop(window.innerWidth >= 800); }
@@ -1075,10 +1113,10 @@ function App() {
     setCustomer({name:'',phone:'',address:'',notes:''});
     setSelZone(null);
     setPaymentType('cash');
-    setTab('menu');
+    setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize, copies); }, 150);
   }
 
   function addItem() {
@@ -1088,6 +1126,7 @@ function App() {
   }
   function delItem(id) { if (window.confirm('Delete item?')) setMenuItems(function(p){ return p.filter(function(i){ return i.id!==id; }); }); }
   function saveItem() { setMenuItems(function(p){ return p.map(function(i){ return i.id===editItem.id ? Object.assign({},editItem,{price:parseFloat(editItem.price)}) : i; }); }); setEditItem(null); }
+  function resetMenu() { if (window.confirm('Reset menu to default? This will remove any custom items you have added.')) { setMenuItems(MENU); setEditItem(null); } }
   function addZone() { if (!newZone.area.trim() || !newZone.price) return; setZones(function(p){ return p.concat([Object.assign({},newZone,{id:Date.now(),price:parseFloat(newZone.price)})]); }); setNewZone({area:'',price:''}); }
   function delZone(id) { if (window.confirm('Remove zone?')) setZones(function(p){ return p.filter(function(z){ return z.id!==id; }); }); }
   function saveZone() { setZones(function(p){ return p.map(function(z){ return z.id===editZone.id ? Object.assign({},editZone,{price:parseFloat(editZone.price)}) : z; }); }); setEditZone(null); }
@@ -1110,16 +1149,16 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize};
-  var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
+  var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems,zones:zones};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems,zones:zones};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,zones:zones,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
-    var desktopTabs = [['order','🛒 New Order'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['history','📋 History'],['backup','💾 Backup']];
+    var desktopTabs = [['order','🛒 New Order'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['history','📋 History'],['backup','⚙️ Settings & Backup']];
     return h('div', {style:{height:'100vh',display:'flex',flexDirection:'column',overflow:'hidden'}},
       header,
       h('div', {style:{display:'flex',background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0,overflowX:'auto'}},
@@ -1146,7 +1185,7 @@ function App() {
   }
 
   /* ── MOBILE ── */
-  var mobileTabs = [['menu','🍜','Menu'],['basket','🛒','Basket'+(itemCount>0?' ('+itemCount+')':'')],['settings','⚙️','Settings'],['backupm','💾','Backup'],['histm','📋','History']];
+  var mobileTabs = [['menu','🍜','Menu'],['basket','🛒','Basket'+(itemCount>0?' ('+itemCount+')':'')],['settings','⚙️','Editor'],['backupm','💾','Settings'],['histm','📋','History']];
   return h('div', {style:{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},
     header,
     okBanner,
