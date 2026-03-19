@@ -16,19 +16,12 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
 .mbtn{-webkit-tap-highlight-color:transparent;transition:opacity 0.1s;}
 .mbtn:active{opacity:0.75;}
 #receipt-frame{display:none;}
+/* Print styles injected dynamically by printReceipt() */
 @media print{
-  @page{size:80mm auto;margin:0;}
   html,body{height:auto!important;overflow:visible!important;}
   body>*{display:none!important;}
-  #receipt-frame{
-    display:block!important;font-family:'Courier New',Courier,monospace;
-    font-size:12px;line-height:1.6;color:#000;background:#fff;
-    width:72mm;padding:4mm 0 20mm;margin:0 auto;
-    white-space:pre-wrap;word-break:break-word;
-    page-break-inside:avoid;-webkit-print-color-adjust:exact;
-  }
   #receipt-frame div{page-break-inside:avoid;break-inside:avoid;}
-  #receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:4px 0;display:block;width:100%;}
+  #receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:3px 0;display:block;width:100%;}
 }
 </style>
 </head>
@@ -62,7 +55,7 @@ var ICONS = {
 var MENU = [
   {id:1,  num:'1',  name:'Prawn Crackers',                       cat:'Starters',  price:3.00},
   {id:2,  num:'2',  name:'Chicken on Toast',                     cat:'Starters',  price:6.50},
-  {id:3,  num:'3',  name:'Chicken Satay 🌶',                     cat:'Starters',  price:6.50},
+  {id:3,  num:'3',  name:'Chicken Satay',                     cat:'Starters',  price:6.50},
   {id:4,  num:'4',  name:'Prawn Tempura',                        cat:'Starters',  price:6.95},
   {id:5,  num:'5',  name:'Fish Cakes',                           cat:'Starters',  price:6.50},
   {id:6,  num:'6',  name:'Spring Roll (V)',                      cat:'Starters',  price:5.95},
@@ -76,22 +69,22 @@ var MENU = [
   {id:131,num:'13a',name:'Salt & Pepper Squid',                  cat:'Starters',  price:6.95},
   {id:14, num:'14', name:'Sharing Platter (x2)',                 cat:'Starters',  price:12.95},
 
-  {id:15, num:'15', name:'Thai Green Curry 🌶 — Prawn',          cat:'Curry', grp:'Thai Green Curry 🌶',   price:10.50},
-  {id:151,num:'15', name:'Thai Green Curry 🌶 — Chicken/Pork',   cat:'Curry', grp:'Thai Green Curry 🌶',   price:9.50},
-  {id:152,num:'15', name:'Thai Green Curry 🌶 — Beef',           cat:'Curry', grp:'Thai Green Curry 🌶',   price:10.50},
-  {id:153,num:'15', name:'Thai Green Curry 🌶 — Veg (V)',        cat:'Curry', grp:'Thai Green Curry 🌶',   price:8.95},
-  {id:16, num:'16', name:'Thai Red Curry 🌶🌶 — Prawn',          cat:'Curry', grp:'Thai Red Curry 🌶🌶',  price:10.50},
-  {id:161,num:'16', name:'Thai Red Curry 🌶🌶 — Chicken/Pork',   cat:'Curry', grp:'Thai Red Curry 🌶🌶',  price:9.50},
-  {id:162,num:'16', name:'Thai Red Curry 🌶🌶 — Beef',           cat:'Curry', grp:'Thai Red Curry 🌶🌶',  price:10.50},
-  {id:163,num:'16', name:'Thai Red Curry 🌶🌶 — Veg (V)',        cat:'Curry', grp:'Thai Red Curry 🌶🌶',  price:8.95},
-  {id:17, num:'17', name:'Massaman Curry 🌶 — Prawn',            cat:'Curry', grp:'Massaman Curry 🌶',     price:10.50},
-  {id:171,num:'17', name:'Massaman Curry 🌶 — Chicken/Pork',     cat:'Curry', grp:'Massaman Curry 🌶',     price:9.50},
-  {id:172,num:'17', name:'Massaman Curry 🌶 — Beef',             cat:'Curry', grp:'Massaman Curry 🌶',     price:10.50},
-  {id:173,num:'17', name:'Massaman Curry 🌶 — Veg (V)',          cat:'Curry', grp:'Massaman Curry 🌶',     price:8.95},
-  {id:18, num:'18', name:'Paneang Curry 🌶🌶 — Prawn',           cat:'Curry', grp:'Paneang Curry 🌶🌶',   price:10.50},
-  {id:181,num:'18', name:'Paneang Curry 🌶🌶 — Chicken/Pork',    cat:'Curry', grp:'Paneang Curry 🌶🌶',   price:9.50},
-  {id:182,num:'18', name:'Paneang Curry 🌶🌶 — Beef',            cat:'Curry', grp:'Paneang Curry 🌶🌶',   price:10.50},
-  {id:183,num:'18', name:'Paneang Curry 🌶🌶 — Veg (V)',         cat:'Curry', grp:'Paneang Curry 🌶🌶',   price:8.95},
+  {id:15, num:'15', name:'Thai Green Curry — Prawn',          cat:'Curry', grp:'Thai Green Curry',   price:10.50},
+  {id:151,num:'15', name:'Thai Green Curry — Chicken/Pork',   cat:'Curry', grp:'Thai Green Curry',   price:9.50},
+  {id:152,num:'15', name:'Thai Green Curry — Beef',           cat:'Curry', grp:'Thai Green Curry',   price:10.50},
+  {id:153,num:'15', name:'Thai Green Curry — Veg (V)',        cat:'Curry', grp:'Thai Green Curry',   price:8.95},
+  {id:16, num:'16', name:'Thai Red Curry — Prawn',          cat:'Curry', grp:'Thai Red Curry',  price:10.50},
+  {id:161,num:'16', name:'Thai Red Curry — Chicken/Pork',   cat:'Curry', grp:'Thai Red Curry',  price:9.50},
+  {id:162,num:'16', name:'Thai Red Curry — Beef',           cat:'Curry', grp:'Thai Red Curry',  price:10.50},
+  {id:163,num:'16', name:'Thai Red Curry — Veg (V)',        cat:'Curry', grp:'Thai Red Curry',  price:8.95},
+  {id:17, num:'17', name:'Massaman Curry — Prawn',            cat:'Curry', grp:'Massaman Curry',     price:10.50},
+  {id:171,num:'17', name:'Massaman Curry — Chicken/Pork',     cat:'Curry', grp:'Massaman Curry',     price:9.50},
+  {id:172,num:'17', name:'Massaman Curry — Beef',             cat:'Curry', grp:'Massaman Curry',     price:10.50},
+  {id:173,num:'17', name:'Massaman Curry — Veg (V)',          cat:'Curry', grp:'Massaman Curry',     price:8.95},
+  {id:18, num:'18', name:'Paneang Curry — Prawn',           cat:'Curry', grp:'Paneang Curry',   price:10.50},
+  {id:181,num:'18', name:'Paneang Curry — Chicken/Pork',    cat:'Curry', grp:'Paneang Curry',   price:9.50},
+  {id:182,num:'18', name:'Paneang Curry — Beef',            cat:'Curry', grp:'Paneang Curry',   price:10.50},
+  {id:183,num:'18', name:'Paneang Curry — Veg (V)',         cat:'Curry', grp:'Paneang Curry',   price:8.95},
   {id:19, num:'19', name:'Yellow Curry — Prawn',                  cat:'Curry', grp:'Yellow Curry',          price:10.50},
   {id:191,num:'19', name:'Yellow Curry — Chicken/Pork',           cat:'Curry', grp:'Yellow Curry',          price:9.50},
   {id:192,num:'19', name:'Yellow Curry — Beef',                   cat:'Curry', grp:'Yellow Curry',          price:10.50},
@@ -101,15 +94,15 @@ var MENU = [
   {id:201,num:'20', name:'Pad Khing — Prawn/Beef',                cat:'Stir Fried', grp:'Pad Khing',              price:10.50},
   {id:202,num:'20', name:'Pad Khing — Chicken/Pork',              cat:'Stir Fried', grp:'Pad Khing',              price:9.50},
   {id:203,num:'20', name:'Pad Khing — Veg (V)',                   cat:'Stir Fried', grp:'Pad Khing',              price:8.95},
-  {id:21, num:'21', name:'Pad Gra Pao 🌶🌶🌶 — Duck',            cat:'Stir Fried', grp:'Pad Gra Pao 🌶🌶🌶',   price:11.50},
-  {id:211,num:'21', name:'Pad Gra Pao 🌶🌶🌶 — Prawn',           cat:'Stir Fried', grp:'Pad Gra Pao 🌶🌶🌶',   price:10.50},
-  {id:212,num:'21', name:'Pad Gra Pao 🌶🌶🌶 — Chicken/Pork',    cat:'Stir Fried', grp:'Pad Gra Pao 🌶🌶🌶',   price:9.50},
-  {id:213,num:'21', name:'Pad Gra Pao 🌶🌶🌶 — Beef',            cat:'Stir Fried', grp:'Pad Gra Pao 🌶🌶🌶',   price:10.50},
-  {id:214,num:'21', name:'Pad Gra Pao 🌶🌶🌶 — Veg (V)',         cat:'Stir Fried', grp:'Pad Gra Pao 🌶🌶🌶',   price:8.95},
-  {id:22, num:'22', name:'Cashew Nut 🌶 — Prawn',                 cat:'Stir Fried', grp:'Cashew Nut Stir Fry 🌶', price:10.50},
-  {id:221,num:'22', name:'Cashew Nut 🌶 — Chicken/Pork',          cat:'Stir Fried', grp:'Cashew Nut Stir Fry 🌶', price:9.50},
-  {id:222,num:'22', name:'Cashew Nut 🌶 — Beef',                  cat:'Stir Fried', grp:'Cashew Nut Stir Fry 🌶', price:10.50},
-  {id:223,num:'22', name:'Cashew Nut 🌶 — Veg (V)',               cat:'Stir Fried', grp:'Cashew Nut Stir Fry 🌶', price:8.95},
+  {id:21, num:'21', name:'Pad Gra Pao — Duck',            cat:'Stir Fried', grp:'Pad Gra Pao',   price:11.50},
+  {id:211,num:'21', name:'Pad Gra Pao — Prawn',           cat:'Stir Fried', grp:'Pad Gra Pao',   price:10.50},
+  {id:212,num:'21', name:'Pad Gra Pao — Chicken/Pork',    cat:'Stir Fried', grp:'Pad Gra Pao',   price:9.50},
+  {id:213,num:'21', name:'Pad Gra Pao — Beef',            cat:'Stir Fried', grp:'Pad Gra Pao',   price:10.50},
+  {id:214,num:'21', name:'Pad Gra Pao — Veg (V)',         cat:'Stir Fried', grp:'Pad Gra Pao',   price:8.95},
+  {id:22, num:'22', name:'Cashew Nut — Prawn',                 cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:10.50},
+  {id:221,num:'22', name:'Cashew Nut — Chicken/Pork',          cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:9.50},
+  {id:222,num:'22', name:'Cashew Nut — Beef',                  cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:10.50},
+  {id:223,num:'22', name:'Cashew Nut — Veg (V)',               cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:8.95},
   {id:23, num:'23', name:'Mixed Veg Stir Fry (V)',                 cat:'Stir Fried',                               price:8.95},
   {id:24, num:'24', name:'Sweet & Sour — Prawn',                   cat:'Stir Fried', grp:'Sweet & Sour',          price:10.50},
   {id:241,num:'24', name:'Sweet & Sour — Chicken/Pork',            cat:'Stir Fried', grp:'Sweet & Sour',          price:9.50},
@@ -121,16 +114,16 @@ var MENU = [
   {id:253,num:'25', name:'Oyster Sauce — Veg (V)',                 cat:'Stir Fried', grp:'Oyster Sauce',          price:8.95},
 
   {id:26, num:'26', name:'Tamarind Duck',                          cat:'Duck',        price:11.50},
-  {id:27, num:'27', name:'Red Duck Curry 🌶🌶',                   cat:'Duck',        price:11.50},
+  {id:27, num:'27', name:'Red Duck Curry',                   cat:'Duck',        price:11.50},
 
   {id:28, num:'28', name:'Sea Bass Pad Khing',                     cat:'Fish Dishes', price:12.50},
-  {id:29, num:'29', name:'Sea Bass Pad Gra Pao 🌶🌶🌶',          cat:'Fish Dishes', price:12.50},
+  {id:29, num:'29', name:'Sea Bass Pad Gra Pao',          cat:'Fish Dishes', price:12.50},
   {id:30, num:'30', name:'Steamed Sea Bass Fillet',                cat:'Fish Dishes', price:12.50},
 
-  {id:31, num:'31', name:'Phad Thai 🌶 — Prawn',                  cat:'Noodles', grp:'Phad Thai 🌶', price:8.50},
-  {id:311,num:'31', name:'Phad Thai 🌶 — Beef',                   cat:'Noodles', grp:'Phad Thai 🌶', price:8.50},
-  {id:312,num:'31', name:'Phad Thai 🌶 — Chicken/Pork',           cat:'Noodles', grp:'Phad Thai 🌶', price:7.95},
-  {id:313,num:'31', name:'Phad Thai 🌶 — Veg (V)',                cat:'Noodles', grp:'Phad Thai 🌶', price:6.95},
+  {id:31, num:'31', name:'Phad Thai — Prawn',                  cat:'Noodles', grp:'Phad Thai', price:8.50},
+  {id:311,num:'31', name:'Phad Thai — Beef',                   cat:'Noodles', grp:'Phad Thai', price:8.50},
+  {id:312,num:'31', name:'Phad Thai — Chicken/Pork',           cat:'Noodles', grp:'Phad Thai', price:7.95},
+  {id:313,num:'31', name:'Phad Thai — Veg (V)',                cat:'Noodles', grp:'Phad Thai', price:6.95},
   {id:32, num:'32', name:'Plain Noodles (V)',                       cat:'Noodles',                     price:4.95},
 
   {id:33, num:'33', name:'Steamed Jasmine Rice (V)',               cat:'Rice & Sides', price:2.95},
@@ -176,8 +169,19 @@ var DEF_ZONES = [
 ];
 
 /* ── RECEIPT PRINTER ── */
-function printReceipt(ord) {
-  var W = 32;
+function printReceipt(ord, paperSize) {
+  var is58 = paperSize === '58';
+  var W = is58 ? 24 : 32;
+  var mmSize = is58 ? '58mm' : '80mm';
+  var mmWidth = is58 ? '50mm' : '72mm';
+  var fontSize = is58 ? '11px' : '12px';
+  var lineH = is58 ? '1.5' : '1.6';
+  var padTop = is58 ? '3mm' : '4mm';
+
+  // Inject correct print CSS dynamically
+  var styleEl = document.getElementById('receipt-print-style');
+  if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 15mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;page-break-inside:avoid;-webkit-print-color-adjust:exact;}}';
   var HR = '<hr class="rhr"/>';
   function center(txt) {
     var pad = Math.max(0, Math.floor((W - txt.length) / 2));
@@ -222,12 +226,12 @@ function printReceipt(ord) {
     if (cur) row(cur);
   }
   div();
-  row('ITEM' + ' '.repeat(W - 4 - 3 - 6) + 'QTY' + ' '.repeat(3) + 'AMT');
+  row('ITEM' + ' '.repeat(W - 4 - 2 - 5) + 'QT' + ' '.repeat(2) + 'AMT');
   div();
   ord.items.forEach(function(item) {
     var qtyStr = 'x' + item.qty;
     var amtStr = '\u00a3' + (item.price * item.qty).toFixed(2);
-    var suffix = ' ' + qtyStr.padEnd(4) + amtStr.padStart(6);
+    var suffix = ' ' + qtyStr.padEnd(3) + amtStr.padStart(5);
     var maxNameW = W - suffix.length;
     var name = item.name;
     if (name.length <= maxNameW) {
@@ -251,6 +255,10 @@ function printReceipt(ord) {
   if (ord.deliveryCharge > 0) {
     row(line('Food subtotal', '\u00a3' + ord.foodTotal.toFixed(2)));
     row(line('Delivery', '\u00a3' + ord.deliveryCharge.toFixed(2)));
+    div();
+  }
+  if (ord.paymentType) {
+    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
     div();
   }
   html.push('<div style="font-size:14px;font-weight:bold;">' +
@@ -292,6 +300,7 @@ function MenuScreen(props) {
   var activeCat = props.activeCat;
   var setActiveCat = props.setActiveCat;
   var catRefs = props.catRefs;
+  var isDesktop = props.isDesktop;
 
   var filtered = useMemo(function() {
     if (!search.trim()) return menuItems;
@@ -356,10 +365,11 @@ function MenuScreen(props) {
         h('span', {style:{fontSize:13,fontWeight:800,color:C.accent,letterSpacing:1.5,textTransform:'uppercase'}}, cat)
       ),
       groups.map(function(sec, si) {
-        var cols = sec.grp ? Math.min(sec.items.length, 5) : 'auto-fill';
-        var gridCols = sec.grp
-          ? 'repeat(' + cols + ', 1fr)'
-          : 'repeat(auto-fill, minmax(min(140px, 45%), 1fr))';
+        /* Solo items: 4 cols on desktop/iPad, 2 cols on mobile
+           Grouped variants: up to 4 cols, capped at item count */
+        var soloCols = isDesktop ? 4 : 2;
+        var grpCols = Math.min(sec.items.length, isDesktop ? 4 : 2);
+        var gridCols = sec.grp ? 'repeat(' + grpCols + ',1fr)' : 'repeat(' + soloCols + ',1fr)';
         return h('div', {key: si, style:{marginBottom:10}},
           sec.grp && h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
           h('div', {style:{display:'grid', gridTemplateColumns:gridCols, gap:6}},
@@ -432,6 +442,8 @@ function BasketScreen(props) {
   var deliveryCharge = props.deliveryCharge;
   var grandTotal = props.grandTotal;
   var onSubmit = props.onSubmit;
+  var paymentType = props.paymentType;
+  var setPaymentType = props.setPaymentType;
 
   var inp = {
     width:'100%', background:C.bg, border:'1px solid ' + C.border,
@@ -439,7 +451,9 @@ function BasketScreen(props) {
     marginBottom:8, outline:'none'
   };
 
-  return h('div', {style:{display:'flex',flexDirection:'column',height:'100%',minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'12px 12px 32px'}},
+  return h('div', {style:{display:'flex',flexDirection:'column',height:'100%',minHeight:0}},
+    /* Scrollable content */
+    h('div', {style:{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'12px 12px 8px'}},
     /* Order type */
     h('div', {style:{marginBottom:12}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'ORDER TYPE'),
@@ -488,7 +502,25 @@ function BasketScreen(props) {
       h('input', {style:inp, type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value}); }); }}),
       h('input', {style:inp, type:'tel',  placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
       orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value}); }); }}),
-      h('textarea', {style:Object.assign({},inp,{marginBottom:0,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }})
+      h('textarea', {style:Object.assign({},inp,{marginBottom:8,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }}),
+      /* Payment type */
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'PAYMENT'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['cash','card'].map(function(t) {
+          var active = paymentType === t;
+          return h('button', {
+            key:t, className:'mbtn',
+            onClick: function(){ setPaymentType(t); },
+            style:{
+              flex:1, padding:'11px 8px', borderRadius:10,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:14, cursor:'pointer'
+            }
+          }, t === 'cash' ? '💵 Cash' : '💳 Card');
+        })
+      )
     ),
     /* Items */
     h('div', {style:{marginBottom:12}},
@@ -512,20 +544,22 @@ function BasketScreen(props) {
         })
     ),
     /* Totals */
-    h('div', {style:{background:C.card,borderRadius:12,padding:14,border:'1px solid ' + C.border}},
-      orderType === 'delivery' && foodTotal > 0 && foodTotal < 15 && h('div', {style:{fontSize:12,color:'#e07030',marginBottom:8,textAlign:'center',fontWeight:600}},
-        '\u26a0\ufe0f Min order \u00a315 \u2014 add \u00a3' + (15 - foodTotal).toFixed(2) + ' more'
+    orderType === 'delivery' && foodTotal > 0 && foodTotal < 15 && h('div', {style:{fontSize:12,color:'#e07030',marginBottom:8,textAlign:'center',fontWeight:600}},
+      '\u26a0\ufe0f Min order \u00a315 \u2014 add \u00a3' + (15 - foodTotal).toFixed(2) + ' more'
+    ),
+    deliveryCharge > 0 && h('div', {style:{background:C.card,borderRadius:12,padding:'10px 14px',border:'1px solid ' + C.border,marginBottom:8}},
+      h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:14,color:C.dim,marginBottom:4}},
+        h('span', null, 'Food subtotal'), h('span', null, '\u00a3' + foodTotal.toFixed(2))
       ),
-      deliveryCharge > 0 && h(React.Fragment, null,
-        h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:14,color:C.dim,marginBottom:4}},
-          h('span', null, 'Food subtotal'), h('span', null, '\u00a3' + foodTotal.toFixed(2))
-        ),
-        h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:14,color:C.dim,marginBottom:10,paddingBottom:10,borderBottom:'1px solid ' + C.border}},
-          h('span', null, '🚗 Delivery (' + selectedZone.area + ')'),
-          h('span', null, '+\u00a3' + deliveryCharge.toFixed(2))
-        )
-      ),
-      h('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:14,alignItems:'center'}},
+      h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:14,color:C.dim}},
+        h('span', null, '🚗 Delivery (' + selectedZone.area + ')'),
+        h('span', null, '+\u00a3' + deliveryCharge.toFixed(2))
+      )
+    )
+    ), /* end scrollable */
+    /* Pinned bottom: total + button */
+    h('div', {style:{flexShrink:0,padding:'10px 12px 12px',borderTop:'1px solid ' + C.border,background:C.panel}},
+      h('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}},
         h('span', {style:{fontWeight:700,fontSize:18}}, 'TOTAL'),
         h('span', {style:{fontWeight:800,fontSize:24,color:C.accent}}, '\u00a3' + grandTotal.toFixed(2))
       ),
@@ -733,9 +767,8 @@ function HistoryView(props) {
         )
       : orders.map(function(ord) {
         var isEditing = editingId === ord.id;
-        var d = isEditing ? draft : ord;
-        var dFoodTotal = d.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0);
-        var dZone = isEditing && d.orderType==='delivery' && d.deliveryZone ? zones.find(function(z){ return z.area===d.deliveryZone; }) : null;
+        var dFoodTotal = isEditing ? draft.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0) : ord.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0);
+        var dZone = isEditing && draft.orderType==='delivery' && draft.deliveryZone ? zones.find(function(z){ return z.area===draft.deliveryZone; }) : null;
         var dDelCharge = isEditing ? (dZone ? dZone.price : 0) : (ord.deliveryCharge || 0);
         var dTotal = dFoodTotal + dDelCharge;
 
@@ -772,6 +805,9 @@ function HistoryView(props) {
               ord.deliveryCharge > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:5,paddingTop:5,borderTop:'1px solid ' + C.border,color:C.dim}},
                 h('span', null, '🚗 Delivery (' + ord.deliveryZone + ')'),
                 h('span', null, '\u00a3' + ord.deliveryCharge.toFixed(2))
+              ),
+              ord.paymentType && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:5,paddingTop:5,borderTop:'1px solid ' + C.border,color:C.dim}},
+                h('span', null, ord.paymentType === 'card' ? '💳 Card' : '💵 Cash')
               ),
               h('div', {style:{display:'flex',justifyContent:'space-between',fontWeight:800,fontSize:15,marginTop:7,paddingTop:7,borderTop:'1px solid ' + C.border}},
                 h('span', null, 'TOTAL'),
@@ -853,6 +889,8 @@ function BackupRestore(props) {
   var setMenuItems = props.setMenuItems;
   var setZones = props.setZones;
   var setOrders = props.setOrders;
+  var paperSize = props.paperSize;
+  var setPaperSize = props.setPaperSize;
 
   var msgState = useState(null);
   var msg = msgState[0];
@@ -911,6 +949,30 @@ function BackupRestore(props) {
       h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, 'Backup & Restore')
     ),
     h('p', {style:{fontSize:13,color:C.muted,marginBottom:16}}, 'Save your menu, zones and order history to a file, or restore from a previous backup.'),
+
+    /* Paper size toggle */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '🖨️ RECEIPT PAPER SIZE'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['58','80'].map(function(size) {
+          var active = paperSize === size;
+          return h('button', {
+            key: size, className:'mbtn',
+            onClick: function(){ setPaperSize(size); },
+            style:{
+              flex:1, padding:'10px 8px', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, size + 'mm');
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
+        paperSize === '58' ? 'Fits 58mm thermal paper — most Android POS terminals' : 'Fits 80mm thermal paper — standard desktop receipt printers'
+      )
+    ),
     h('div', {style:card},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
       h('button', {className:'mbtn', onClick:doExport, style:{width:'100%',padding:'11px 18px',borderRadius:9,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:C.accent,color:C.bg}}, 'Download Backup File'),
@@ -950,8 +1012,10 @@ function App() {
   var orderState = useState([]); var order = orderState[0]; var setOrder = orderState[1];
   var customerState = useState({name:'',phone:'',address:'',notes:''}); var customer = customerState[0]; var setCustomer = customerState[1];
   var orderTypeState = useState('delivery'); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
+  var paymentTypeState = useState('cash'); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
   var selZoneState = useState(null); var selZone = selZoneState[0]; var setSelZone = selZoneState[1];
-  var tabState = useState('menu'); var tab = tabState[0]; var setTab = tabState[1];
+  var isDesktopState = useState(function(){ return window.innerWidth >= 800; }); var isDesktop = isDesktopState[0]; var setIsDesktop = isDesktopState[1];
+  var tabState = useState(function(){ return window.innerWidth >= 800 ? 'order' : 'menu'; }); var tab = tabState[0]; var setTab = tabState[1];
   var activeCatState = useState('All'); var activeCat = activeCatState[0]; var setActiveCat = activeCatState[1];
   var searchState = useState(''); var search = searchState[0]; var setSearch = searchState[1];
   var showOkState = useState(false); var showOk = showOkState[0]; var setShowOk = showOkState[1];
@@ -959,12 +1023,13 @@ function App() {
   var editItemState = useState(null); var editItem = editItemState[0]; var setEditItem = editItemState[1];
   var newZoneState = useState({area:'',price:''}); var newZone = newZoneState[0]; var setNewZone = newZoneState[1];
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
-  var isDesktopState = useState(function(){ return window.innerWidth >= 800; }); var isDesktop = isDesktopState[0]; var setIsDesktop = isDesktopState[1];
+  var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m3', JSON.stringify(menuItems)); }, [menuItems]);
   useEffect(function(){ localStorage.setItem('hongs_z', JSON.stringify(zones)); }, [zones]);
   useEffect(function(){ localStorage.setItem('hongs_o', JSON.stringify(orders)); }, [orders]);
+  useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ if (orderType !== 'delivery') setSelZone(null); }, [orderType]);
   useEffect(function() {
     function fn() { setIsDesktop(window.innerWidth >= 800); }
@@ -1001,6 +1066,7 @@ function App() {
       deliveryZone: selZone ? selZone.area : null,
       total: grand,
       orderType: orderType,
+      paymentType: paymentType,
       time: new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}),
       date: new Date().toLocaleDateString('en-GB')
     };
@@ -1008,10 +1074,11 @@ function App() {
     setOrder([]);
     setCustomer({name:'',phone:'',address:'',notes:''});
     setSelZone(null);
+    setPaymentType('cash');
     setTab('menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize); }, 150);
   }
 
   function addItem() {
@@ -1043,12 +1110,12 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:printReceipt,menuItems:menuItems,zones:zones};
-  var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs};
-  var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,zones:zones,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems,zones:zones};
+  var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
+  var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,zones:zones,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
@@ -1065,7 +1132,7 @@ function App() {
       okBanner,
       tab === 'order' && h('div', {style:{flex:1,display:'flex',overflow:'hidden',minHeight:0}},
         h('div', {style:{flex:1,overflow:'hidden',minWidth:0}}, h(MenuScreen, menuScreenProps)),
-        h('div', {style:{width:340,borderLeft:'1px solid ' + C.border,flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column'}}, h(BasketScreen, basketProps))
+        h('div', {style:{width:340,borderLeft:'1px solid ' + C.border,flexShrink:0,display:'flex',flexDirection:'column',minHeight:0}}, h(BasketScreen, basketProps))
       ),
       (tab==='menuEdit'||tab==='zones'||tab==='history'||tab==='backup') && h('div', {style:{flex:1,overflowY:'auto',padding:20}},
         h('div', {style:{maxWidth:760,margin:'0 auto'}},
