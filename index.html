@@ -308,6 +308,7 @@ function MenuScreen(props) {
   var menuItems = props.menuItems;
   var order = props.order;
   var onAdd = props.onAdd;
+  var onRemove = props.onRemove;
   var search = props.search;
   var setSearch = props.setSearch;
   var activeCat = props.activeCat;
@@ -364,54 +365,77 @@ function MenuScreen(props) {
     var catItems = getCatItems(cat);
     if (!catItems.length) return null;
     var groups = buildGroups(catItems);
-    return h('div', {
-      key: cat,
-      ref: function(el){ catRefs.current[cat] = el; },
-      style:{marginBottom:14}
-    },
-      h('div', {style:{
-        display:'flex', alignItems:'center', gap:8, marginBottom:6,
-        position:'sticky', top:0, background:C.bg, padding:'6px 2px', zIndex:2,
-        borderBottom:'2px solid ' + C.border
-      }},
-        h('span', {style:{fontSize:18}}, ICONS[cat]),
-        h('span', {style:{fontSize:13,fontWeight:800,color:C.accent,letterSpacing:1.5,textTransform:'uppercase'}}, cat)
-      ),
-      groups.map(function(sec, si) {
-        /* Solo items: 4 cols on desktop/iPad, 2 cols on mobile
-           Grouped variants: up to 4 cols, capped at item count */
-        var soloCols = isDesktop ? 4 : 2;
-        var grpCols = Math.min(sec.items.length, isDesktop ? 4 : 2);
-        var gridCols = sec.grp ? 'repeat(' + grpCols + ',1fr)' : 'repeat(' + soloCols + ',1fr)';
-        return h('div', {key: si, style:{marginBottom:10}},
-          sec.grp && h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
-          h('div', {style:{display:'grid', gridTemplateColumns:gridCols, gap:6}},
-            sec.items.map(function(item) {
-              var inOrder = order.find(function(o){ return o.id === item.id; });
-              var label = sec.grp ? (item.name.split(' — ')[1] || item.name) : item.name;
-              return h('button', {
-                key: item.id,
-                className: 'mbtn',
+    var soloCols = isDesktop ? 4 : 2;
+    var soloItems = groups.filter(function(s){ return !s.grp; }).map(function(s){ return s.items[0]; });
+    var grpSections = groups.filter(function(s){ return s.grp; });
+
+    var soloGrid = soloItems.length > 0 ? h('div', {style:{display:'grid', gridTemplateColumns:'repeat(' + soloCols + ',1fr)', gap:6, marginBottom: grpSections.length > 0 ? 10 : 0}},
+      soloItems.map(function(item) {
+        var inOrder = order.find(function(o){ return o.id === item.id; });
+        return h('div', {key: item.id, style:{position:'relative'}},
+          h('button', {
+            className:'mbtn',
+            onClick: function(){ onAdd(item); },
+            style:{width:'100%', background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'block'}
+          },
+            h('div', {style:{fontSize:13,fontWeight:800,color:C.muted,marginBottom:2}}, '#' + item.num),
+            h('div', {style:{fontWeight:700,fontSize:13,lineHeight:1.3,marginBottom:5}}, item.name),
+            h('div', {style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
+              h('span', {style:{color:C.accent,fontWeight:800,fontSize:13}}, '\u00a3' + item.price.toFixed(2)),
+              inOrder && h('span', {style:{background:C.accent,color:C.bg,fontWeight:800,fontSize:11,padding:'2px 6px',borderRadius:7}}, '\u00d7' + inOrder.qty)
+            )
+          ),
+          inOrder && h('button', {
+            className:'mbtn',
+            onClick: function(e){ e.stopPropagation(); onRemove(item.id); },
+            style:{position:'absolute',top:4,right:4,width:22,height:22,borderRadius:6,border:'none',background:C.danger,color:'#fff',cursor:'pointer',fontSize:14,fontWeight:900,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',padding:0}
+          }, '−')
+        );
+      })
+    ) : null;
+
+    var grpGrids = grpSections.map(function(sec, si) {
+      var grpCols = Math.min(sec.items.length, isDesktop ? 4 : 2);
+      return h('div', {key: si, style:{marginBottom:10}},
+        h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
+        h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gap:6}},
+          sec.items.map(function(item) {
+            var inOrder = order.find(function(o){ return o.id === item.id; });
+            var label = item.name.split(' — ')[1] || item.name;
+            return h('div', {key: item.id, style:{position:'relative'}},
+              h('button', {
+                className:'mbtn',
                 onClick: function(){ onAdd(item); },
-                style:{
-                  background: inOrder ? C.selected : C.card,
-                  border:'2px solid ' + (inOrder ? C.accent : C.border),
-                  borderRadius:10, padding:'10px 8px', cursor:'pointer',
-                  textAlign:'left', color:C.text,
-                  boxShadow: inOrder ? '0 0 0 1px ' + C.accent + '40' : 'none'
-                }
+                style:{width:'100%', background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'block'}
               },
-                !sec.grp && h('div', {style:{fontSize:10,color:C.muted,marginBottom:2}}, '#' + item.num),
                 h('div', {style:{fontWeight:700,fontSize:13,lineHeight:1.3,marginBottom:5}}, label),
                 h('div', {style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
                   h('span', {style:{color:C.accent,fontWeight:800,fontSize:13}}, '\u00a3' + item.price.toFixed(2)),
                   inOrder && h('span', {style:{background:C.accent,color:C.bg,fontWeight:800,fontSize:11,padding:'2px 6px',borderRadius:7}}, '\u00d7' + inOrder.qty)
                 )
-              );
-            })
-          )
-        );
-      })
+              ),
+              inOrder && h('button', {
+                className:'mbtn',
+                onClick: function(e){ e.stopPropagation(); onRemove(item.id); },
+                style:{position:'absolute',top:4,right:4,width:22,height:22,borderRadius:6,border:'none',background:C.danger,color:'#fff',cursor:'pointer',fontSize:14,fontWeight:900,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',padding:0}
+              }, '−')
+            );
+          })
+        )
+      );
+    });
+
+    return h('div', {
+      key: cat,
+      ref: function(el){ catRefs.current[cat] = el; },
+      style:{marginBottom:14}
+    },
+      h('div', {style:{display:'flex', alignItems:'center', gap:8, marginBottom:6, position:'sticky', top:0, background:C.bg, padding:'6px 2px', zIndex:2, borderBottom:'2px solid ' + C.border}},
+        h('span', {style:{fontSize:18}}, ICONS[cat]),
+        h('span', {style:{fontSize:13,fontWeight:800,color:C.accent,letterSpacing:1.5,textTransform:'uppercase'}}, cat)
+      ),
+      soloGrid,
+      grpGrids
     );
   });
 
@@ -1127,7 +1151,7 @@ function App() {
 
   function addItem() {
     if (!newItem.name.trim() || !newItem.price) return;
-    setMenuItems(function(p){ return p.concat([Object.assign({},newItem,{id:Date.now(),price:parseFloat(newItem.price)})]); });
+    setMenuItems(function(p){ return p.concat([Object.assign({},newItem,{id:Date.now(),num:'—',price:parseFloat(newItem.price)})]); });
     setNewItem({name:'',price:'',cat:newItem.cat});
   }
   function delItem(id) { if (window.confirm('Delete item?')) setMenuItems(function(p){ return p.filter(function(i){ return i.id!==id; }); }); }
@@ -1159,7 +1183,7 @@ function App() {
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems,zones:zones};
-  var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
+  var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,zones:zones,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType};
 
   /* ── DESKTOP ── */
