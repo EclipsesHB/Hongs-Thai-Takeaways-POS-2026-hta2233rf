@@ -184,10 +184,6 @@ function printReceipt(ord, paperSize, copies) {
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
   styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 15mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;page-break-inside:avoid;-webkit-print-color-adjust:exact;}}';
   var HR = '<hr class="rhr"/>';
-  function center(txt) {
-    var pad = Math.max(0, Math.floor((W - txt.length) / 2));
-    return ' '.repeat(pad) + txt;
-  }
   function line(left, right) {
     var gap = W - left.length - right.length;
     return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right;
@@ -197,23 +193,32 @@ function printReceipt(ord, paperSize, copies) {
   function div() { html.push(HR); }
   function blank() { html.push('<div>&nbsp;</div>'); }
 
-  row(center("HONG'S THAI TAKEAWAY"));
-  row(center('01386 423341'));
-  row(center('9 Four Pools Shopping Centre'));
-  row(center('Davies Road, Evesham'));
-  row(center('WR11 1YP'));
+  function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
+
+  crow("HONG'S THAI TAKEAWAY");
+  crow('01386 423341');
+  crow('9 Four Pools Shopping Centre');
+  crow('Davies Road, Evesham');
+  crow('WR11 1YP');
   div();
-  row(center(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***'));
+  crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
   div();
   row('Date : ' + ord.date);
   row('Time : ' + ord.time);
-  if (ord.customer.name)  row('Name : ' + ord.customer.name);
-  if (ord.customer.phone) row('Tel  : ' + ord.customer.phone);
-  if (ord.orderType === 'delivery' && ord.customer.address) {
-    var addrLines = ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean);
-    addrLines.forEach(function(part, i) {
-      row((i === 0 ? 'Addr : ' : '       ') + part);
-    });
+  row('Name : ' + (ord.customer.name || ''));
+  blank();
+  row('Tel  : ' + (ord.customer.phone || ''));
+  blank();
+  if (ord.orderType === 'delivery') {
+    if (ord.customer.address) {
+      var addrLines = ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean);
+      addrLines.forEach(function(part, i) {
+        row((i === 0 ? 'Addr : ' : '       ') + part);
+      });
+    } else {
+      row('Addr : ');
+    }
+    blank();
   }
   if (ord.customer.notes) {
     div();
@@ -262,12 +267,13 @@ function printReceipt(ord, paperSize, copies) {
     row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
     div();
   }
-  html.push('<div style="font-size:14px;font-weight:bold;">' +
+  var totalFontSize = is58 ? '12px' : '14px';
+  html.push('<div style="font-size:' + totalFontSize + ';font-weight:bold;">' +
     line('TOTAL', '\u00a3' + ord.total.toFixed(2)).replace(/ /g, '&nbsp;') + '</div>');
   div();
   blank();
-  row(center('Thank you for your order!'));
-  row(center('hongsthaitakeaway.co.uk'));
+  html.push('<div style="text-align:center;">Thank you for your order!</div>');
+  html.push('<div style="text-align:center;">hongsthaitakeaway.co.uk</div>');
   blank();
   blank();
   document.getElementById('receipt-frame').innerHTML = html.join('');
