@@ -472,7 +472,6 @@ function BasketScreen(props) {
   var setCustomer = props.setCustomer;
   var orderType = props.orderType;
   var setOrderType = props.setOrderType;
-  var zones = props.zones;
   var selectedZone = props.selectedZone;
   var setSelectedZone = props.setSelectedZone;
   var foodTotal = props.foodTotal;
@@ -510,15 +509,15 @@ function BasketScreen(props) {
         })
       )
     ),
-    /* Delivery zone */
+    /* Delivery charge */
     orderType === 'delivery' && h('div', {style:{marginBottom:12}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'DELIVERY ZONE'),
-      h('div', {style:{display:'flex',flexWrap:'wrap',gap:6}},
-        zones.map(function(z) {
-          var sel = selectedZone && selectedZone.id === z.id;
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'DELIVERY CHARGE'),
+      h('div', {style:{display:'flex',flexWrap:'wrap',gap:6,marginBottom:6}},
+        ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'].map(function(p) {
+          var sel = selectedZone === p;
           return h('button', {
-            key: z.id, className:'mbtn',
-            onClick: function(){ setSelectedZone(sel ? null : z); },
+            key: p, className:'mbtn',
+            onClick: function(){ setSelectedZone(sel ? null : p); },
             style:{
               padding:'7px 11px', borderRadius:9,
               border:'1px solid ' + (sel ? C.accent : C.border),
@@ -526,11 +525,17 @@ function BasketScreen(props) {
               color: sel ? C.accent : C.dim,
               fontSize:13, fontWeight:600, cursor:'pointer'
             }
-          }, z.area + ' ', h('span', {style:{opacity:0.6}}, '\u00a3' + z.price.toFixed(2)));
+          }, '\u00a3' + p);
         })
       ),
-      selectedZone && h('div', {style:{marginTop:6,fontSize:13,color:C.accent,fontWeight:600}},
-        '📍 ' + selectedZone.area + ' · \u00a3' + selectedZone.price.toFixed(2)
+      h('div', {style:{display:'flex',alignItems:'center',gap:8}},
+        h('input', {
+          type:'number', step:'0.50', min:'0', placeholder:'Custom \u00a3',
+          value: selectedZone && ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'].indexOf(selectedZone) === -1 ? selectedZone : '',
+          onChange: function(e){ setSelectedZone(e.target.value || null); },
+          style:{flex:1, background:C.bg, border:'1px solid ' + C.border, borderRadius:9, padding:'7px 11px', color:C.text, fontSize:13, outline:'none'}
+        }),
+        selectedZone && h('div', {style:{fontSize:13,color:C.accent,fontWeight:700}}, '\u00a3' + parseFloat(selectedZone).toFixed(2))
       )
     ),
     /* Customer */
@@ -589,7 +594,7 @@ function BasketScreen(props) {
         h('span', null, 'Food subtotal'), h('span', null, '\u00a3' + foodTotal.toFixed(2))
       ),
       h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:14,color:C.dim}},
-        h('span', null, '🚗 Delivery (' + selectedZone.area + ')'),
+        h('span', null, '🚗 Delivery'),
         h('span', null, '+\u00a3' + deliveryCharge.toFixed(2))
       )
     )
@@ -725,7 +730,6 @@ function HistoryView(props) {
   var clearOrders = props.clearOrders;
   var onPrint = props.onPrint;
   var menuItems = props.menuItems;
-  var zones = props.zones;
 
   var editingIdRef = useState(null);
   var editingId = editingIdRef[0];
@@ -748,9 +752,8 @@ function HistoryView(props) {
 
   function saveEdit() {
     var foodTotal = draft.items.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
-    var zoneMatch = zones.find(function(z){ return z.area === draft.deliveryZone; });
     var deliveryCharge = (draft.orderType === 'delivery' && draft.deliveryZone)
-      ? (zoneMatch ? zoneMatch.price : draft.deliveryCharge || 0) : 0;
+      ? (parseFloat(draft.deliveryZone) || 0) : 0;
     var updated = Object.assign({}, draft, {foodTotal:foodTotal, deliveryCharge:deliveryCharge, total:foodTotal+deliveryCharge});
     setOrders(function(prev){ return prev.map(function(o){ return o.id === updated.id ? updated : o; }); });
     setEditingId(null);
@@ -809,8 +812,9 @@ function HistoryView(props) {
       : orders.map(function(ord) {
         var isEditing = editingId === ord.id;
         var dFoodTotal = isEditing ? draft.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0) : ord.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0);
-        var dZone = isEditing && draft.orderType==='delivery' && draft.deliveryZone ? zones.find(function(z){ return z.area===draft.deliveryZone; }) : null;
-        var dDelCharge = isEditing ? (dZone ? dZone.price : 0) : (ord.deliveryCharge || 0);
+        var dDelCharge = isEditing
+          ? (draft.orderType==='delivery' && draft.deliveryZone ? (parseFloat(draft.deliveryZone)||0) : 0)
+          : (ord.deliveryCharge || 0);
         var dTotal = dFoodTotal + dDelCharge;
 
         return h('div', {key:ord.id, style:{background:C.panel,borderRadius:12,padding:14,marginBottom:12,border:'1px solid ' + (isEditing ? C.accent : C.border),boxShadow:isEditing?'0 0 0 1px ' + C.accent + '40':'none'}},
@@ -867,14 +871,17 @@ function HistoryView(props) {
               })
             ),
             draft.orderType === 'delivery' && h('div', {style:{marginBottom:10}},
-              h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,marginBottom:5,letterSpacing:1.5}}, 'DELIVERY ZONE'),
-              h('div', {style:{display:'flex',flexWrap:'wrap',gap:5}},
-                zones.map(function(z) {
-                  return h('button', {key:z.id, className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{deliveryZone:z.area})); }, style:{padding:'4px 8px',borderRadius:7,border:'1px solid ' + (draft.deliveryZone===z.area?C.accent:C.border),background:draft.deliveryZone===z.area?C.accentBg:'transparent',color:draft.deliveryZone===z.area?C.accent:C.dim,fontSize:11,fontWeight:600,cursor:'pointer'}},
-                    z.area + ' \u00a3' + z.price.toFixed(2)
+              h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,marginBottom:5,letterSpacing:1.5}}, 'DELIVERY CHARGE'),
+              h('div', {style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:5}},
+                ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'].map(function(p) {
+                  var dz = draft.deliveryZone;
+                  var sel = dz === '\u00a3' + parseFloat(p).toFixed(2) || dz === p;
+                  return h('button', {key:p, className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{deliveryZone:'\u00a3'+parseFloat(p).toFixed(2)})); }, style:{padding:'4px 8px',borderRadius:7,border:'1px solid '+(sel?C.accent:C.border),background:sel?C.accentBg:'transparent',color:sel?C.accent:C.dim,fontSize:11,fontWeight:600,cursor:'pointer'}},
+                    '\u00a3' + p
                   );
                 })
-              )
+              ),
+              h('input', {type:'number', step:'0.50', min:'0', placeholder:'Custom \u00a3', value:'', onChange:function(e){ if(e.target.value) setDraft(Object.assign({},draft,{deliveryZone:'\u00a3'+parseFloat(e.target.value).toFixed(2)})); }, style:{width:'100%',background:C.bg,border:'1px solid '+C.border,borderRadius:7,padding:'5px 9px',color:C.text,fontSize:12,outline:'none'}})
             ),
             h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,marginBottom:5,letterSpacing:1.5}}, 'CUSTOMER'),
             h('input', {style:inp2, placeholder:'👤 Name', value:draft.customer.name, onChange:function(e){ setDraft(Object.assign({},draft,{customer:Object.assign({},draft.customer,{name:e.target.value})})); }}),
@@ -1079,7 +1086,7 @@ function App() {
   var customerState = useState({name:'',phone:'',address:'',notes:''}); var customer = customerState[0]; var setCustomer = customerState[1];
   var orderTypeState = useState('delivery'); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
   var paymentTypeState = useState('cash'); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
-  var selZoneState = useState(null); var selZone = selZoneState[0]; var setSelZone = selZoneState[1];
+  var selZoneState = useState(null); var selZone = selZoneState[0]; var setSelZone = selZoneState[1]; /* null or price string e.g. "2.50" */
   var isDesktopState = useState(function(){ return window.innerWidth >= 800; }); var isDesktop = isDesktopState[0]; var setIsDesktop = isDesktopState[1];
   var tabState = useState(function(){ return window.innerWidth >= 800 ? 'order' : 'menu'; }); var tab = tabState[0]; var setTab = tabState[1];
   var activeCatState = useState('All'); var activeCat = activeCatState[0]; var setActiveCat = activeCatState[1];
@@ -1119,7 +1126,7 @@ function App() {
   }
 
   var foodTotal = order.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
-  var delCharge = orderType === 'delivery' && selZone ? selZone.price : 0;
+  var delCharge = orderType === 'delivery' && selZone ? parseFloat(selZone) || 0 : 0;
   var grand = foodTotal + delCharge;
   var itemCount = order.reduce(function(s,o){ return s + o.qty; }, 0);
 
@@ -1131,7 +1138,7 @@ function App() {
       items: order.slice(),
       foodTotal: foodTotal,
       deliveryCharge: delCharge,
-      deliveryZone: selZone ? selZone.area : null,
+      deliveryZone: selZone ? '\u00a3' + parseFloat(selZone).toFixed(2) : null,
       total: grand,
       orderType: orderType,
       paymentType: paymentType,
@@ -1182,9 +1189,9 @@ function App() {
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems,zones:zones};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,zones:zones,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType};
+  var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
