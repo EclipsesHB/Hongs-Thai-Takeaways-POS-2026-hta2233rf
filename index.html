@@ -343,12 +343,16 @@ function MenuScreen(props) {
     setTimeout(function() {
       var el = catRefs.current[cat];
       var sc = document.getElementById('mscroll');
-      if (el && sc) {
+      if (!el || !sc) return;
+      if (isDesktop) {
         var elRect = el.getBoundingClientRect();
         var scRect = sc.getBoundingClientRect();
         sc.scrollTop = sc.scrollTop + (elRect.top - scRect.top);
+      } else {
+        /* On mobile, scrollIntoView is the most reliable approach */
+        el.scrollIntoView({block:'start', behavior:'instant'});
       }
-    }, 40);
+    }, 80);
   }
 
   var pillRow = h('div', {
@@ -464,7 +468,7 @@ function MenuScreen(props) {
     ),
     h('div', {
       id: 'mscroll',
-      style:{flex:1,overflowY:'auto',overflowX:'hidden',WebkitOverflowScrolling:'touch',padding: isDesktop ? '10px 10px 20px' : '0 10px 20px'}
+      style:{flex:1,overflowY:'auto',overflowX:'hidden',WebkitOverflowScrolling:'touch',padding: isDesktop ? '10px 10px 20px' : '4px 10px 20px'}
     },
       catNodes,
       catsToShow.length === 0 && h('div', {style:{textAlign:'center',padding:'60px 20px',color:C.muted}},
