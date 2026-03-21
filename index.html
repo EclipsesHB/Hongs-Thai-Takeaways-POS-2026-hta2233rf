@@ -197,6 +197,8 @@ function printReceipt(ord, paperSize, copies) {
   function blank() { html.push('<div>&nbsp;</div>'); }
 
   function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
+  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
+  function rowb(txt) { html.push('<div style="font-weight:bold;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
 
   crow("HONG'S THAI TAKEAWAY");
   crow('01386 423341');
@@ -206,6 +208,14 @@ function printReceipt(ord, paperSize, copies) {
   div();
   crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
   div();
+  if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
+    crowb('*** SCHEDULED ***');
+    crowb(ord.scheduleTime.toUpperCase());
+    div();
+  } else {
+    crowb('*** ASAP ***');
+    div();
+  }
   row('Date : ' + ord.date);
   row('Time : ' + ord.time);
   row('Name : ' + (ord.customer.name || ''));
@@ -230,9 +240,9 @@ function printReceipt(ord, paperSize, copies) {
     var cur = '';
     words.forEach(function(w) {
       if ((cur + ' ' + w).trim().length <= W) { cur = (cur + ' ' + w).trim(); }
-      else { row(cur); cur = w; }
+      else { rowb(cur); cur = w; }
     });
-    if (cur) row(cur);
+    if (cur) rowb(cur);
   }
   div();
   row('ITEM' + ' '.repeat(W - 4 - 2 - 5) + 'QT' + ' '.repeat(2) + 'AMT');
@@ -257,6 +267,11 @@ function printReceipt(ord, paperSize, copies) {
       lines.forEach(function(l, i) {
         if (i < lines.length - 1) row(l);
         else row(l.padEnd(maxNameW) + suffix);
+      });
+    }
+    if (item.comment && item.comment.trim()) {
+      item.comment.trim().split('\n').forEach(function(commentLine) {
+        if (commentLine.trim()) rowb('  > ' + commentLine.trim());
       });
     }
   });
@@ -483,6 +498,7 @@ function MenuScreen(props) {
 function BasketScreen(props) {
   var order = props.order;
   var updateQty = props.updateQty;
+  var updateItemComment = props.updateItemComment;
   var customer = props.customer;
   var setCustomer = props.setCustomer;
   var orderType = props.orderType;
@@ -495,6 +511,10 @@ function BasketScreen(props) {
   var onSubmit = props.onSubmit;
   var paymentType = props.paymentType;
   var setPaymentType = props.setPaymentType;
+  var scheduleType = props.scheduleType;
+  var setScheduleType = props.setScheduleType;
+  var scheduleTime = props.scheduleTime;
+  var setScheduleTime = props.setScheduleTime;
 
   var inp = {
     width:'100%', background:C.bg, border:'1px solid ' + C.border,
@@ -553,11 +573,38 @@ function BasketScreen(props) {
         selectedZone && h('div', {style:{fontSize:14,color:C.accent,fontWeight:700}}, '\u00a3' + parseFloat(selectedZone).toFixed(2))
       )
     ),
+    /* Schedule */
+    h('div', {style:{marginBottom:12}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'ORDER TIMING'),
+      h('div', {style:{display:'flex',gap:8,marginBottom: scheduleType === 'scheduled' ? 8 : 0}},
+        ['asap','scheduled'].map(function(t) {
+          var active = scheduleType === t;
+          return h('button', {
+            key:t, className:'mbtn',
+            onClick: function(){ setScheduleType(t); },
+            style:{
+              flex:1, padding:'11px 8px', borderRadius:10,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:14, cursor:'pointer'
+            }
+          }, t === 'asap' ? '⚡ ASAP' : '🕐 Schedule');
+        })
+      ),
+      scheduleType === 'scheduled' && h('input', {
+        type:'text',
+        placeholder:'e.g. 6:30pm, 18:30, 7pm...',
+        value: scheduleTime,
+        onChange: function(e){ setScheduleTime(e.target.value); },
+        style:{width:'100%', background:C.bg, border:'1px solid ' + C.accent, borderRadius:10, padding:'11px 13px', color:C.text, fontSize:15, outline:'none'}
+      })
+    ),
     /* Customer */
     h('div', {style:{marginBottom:12}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'CUSTOMER'),
       h('input', {style:inp, type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value}); }); }}),
-      h('input', {style:inp, type:'tel',  placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
+      h('input', {style:inp, type:'tel', inputMode:'numeric', placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
       orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value}); }); }}),
       h('textarea', {style:Object.assign({},inp,{marginBottom:8,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }}),
       /* Payment type */
@@ -587,15 +634,30 @@ function BasketScreen(props) {
       order.length === 0
         ? h('div', {style:{textAlign:'center',padding:'20px',color:C.muted,fontSize:14,background:C.card,borderRadius:10,border:'1px solid ' + C.border}}, 'No items yet — tap the Menu tab to add')
         : order.map(function(item) {
-          return h('div', {key:item.id, style:{display:'flex',alignItems:'center',gap:8,marginBottom:7,background:C.card,borderRadius:10,padding:'10px 12px',border:'1px solid ' + C.border}},
-            h('div', {style:{flex:1,minWidth:0}},
-              h('div', {style:{fontSize:13,fontWeight:600,lineHeight:1.3}}, item.name),
-              h('div', {style:{fontSize:13,color:C.accent,fontWeight:700,marginTop:2}}, '\u00a3' + (item.price * item.qty).toFixed(2))
+          return h('div', {key:item.id, style:{marginBottom:7,background:C.card,borderRadius:10,border:'1px solid ' + C.border,overflow:'hidden'}},
+            h('div', {style:{display:'flex',alignItems:'center',gap:8,padding:'10px 12px'}},
+              h('div', {style:{flex:1,minWidth:0}},
+                h('div', {style:{fontSize:13,fontWeight:600,lineHeight:1.3}}, item.name),
+                h('div', {style:{fontSize:13,color:C.accent,fontWeight:700,marginTop:2}}, '\u00a3' + (item.price * item.qty).toFixed(2))
+              ),
+              h('div', {style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}},
+                h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,-1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '−'),
+                h('span', {style:{fontSize:15,fontWeight:700,minWidth:20,textAlign:'center'}}, item.qty),
+                h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '+')
+              )
             ),
-            h('div', {style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}},
-              h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,-1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '−'),
-              h('span', {style:{fontSize:15,fontWeight:700,minWidth:20,textAlign:'center'}}, item.qty),
-              h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '+')
+            h('div', {style:{padding:'0 10px 8px'}},
+              h('textarea', {
+                placeholder:'✏️ Note for this item...',
+                value: item.comment || '',
+                rows: 1,
+                onChange: function(e){
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                  updateItemComment(item.id, e.target.value);
+                },
+                style:{width:'100%', background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 10px', color: item.comment ? C.text : C.muted, fontSize:12, outline:'none', resize:'none', overflow:'hidden', lineHeight:'1.4', fontFamily:'inherit'}
+              })
             )
           );
         })
@@ -843,6 +905,9 @@ function HistoryView(props) {
               h('span', {style:{fontSize:11,padding:'2px 9px',borderRadius:10,fontWeight:700,background:C.accentBg,color:C.accent}},
                 ord.orderType === 'delivery' ? '🚗 DELIVERY' : '🏃 COLLECTION'
               ),
+              ord.scheduleType === 'scheduled' && ord.scheduleTime
+                ? h('span', {style:{fontSize:11,padding:'2px 9px',borderRadius:10,fontWeight:700,background:'rgba(200,100,64,0.15)',color:'#e07830'}}, '🕐 ' + ord.scheduleTime)
+                : h('span', {style:{fontSize:11,padding:'2px 9px',borderRadius:10,fontWeight:700,background:'rgba(42,106,58,0.2)',color:'#70e890'}}, '⚡ ASAP'),
               h('span', {style:{fontSize:11,color:C.muted}}, ord.date + ' ' + ord.time),
               !isEditing && h(React.Fragment, null,
                 h('button', {className:'mbtn', onClick:function(){ onPrint(ord); }, style:{padding:'5px 10px',borderRadius:8,border:'1px solid ' + C.accent,background:C.accentBg,color:C.accent,cursor:'pointer',fontSize:12,fontWeight:700}}, '🖨️ Print'),
@@ -857,9 +922,12 @@ function HistoryView(props) {
             ord.customer.notes && h('div', {style:{fontSize:12,color:'#c8a060',marginBottom:7,background:'rgba(200,160,64,0.07)',padding:'5px 9px',borderRadius:6}}, '📝 ' + ord.customer.notes),
             h('div', {style:{borderTop:'1px solid ' + C.border,paddingTop:8}},
               ord.items.map(function(item, i) {
-                return h('div', {key:i, style:{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:3}},
-                  h('span', null, item.name + ' \u00d7 ' + item.qty),
-                  h('span', {style:{color:C.accent}}, '\u00a3' + (item.price * item.qty).toFixed(2))
+                return h('div', {key:i, style:{marginBottom:4}},
+                  h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:13}},
+                    h('span', null, item.name + ' \u00d7 ' + item.qty),
+                    h('span', {style:{color:C.accent}}, '\u00a3' + (item.price * item.qty).toFixed(2))
+                  ),
+                  item.comment && item.comment.trim() && h('div', {style:{fontSize:11,color:'#c8a060',paddingLeft:8}}, '↳ ' + item.comment.trim())
                 );
               }),
               ord.deliveryCharge > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:5,paddingTop:5,borderTop:'1px solid ' + C.border,color:C.dim}},
@@ -1113,6 +1181,8 @@ function App() {
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
+  var scheduleTypeState = useState('asap'); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
+  var scheduleTimeState = useState(''); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m3', JSON.stringify(menuItems)); }, [menuItems]);
@@ -1139,6 +1209,11 @@ function App() {
       return prev.map(function(o){ return o.id===id ? Object.assign({},o,{qty:Math.max(0,o.qty+d)}) : o; }).filter(function(o){ return o.qty>0; });
     });
   }
+  function updateItemComment(id, comment) {
+    setOrder(function(prev){
+      return prev.map(function(o){ return o.id===id ? Object.assign({},o,{comment:comment}) : o; });
+    });
+  }
 
   var foodTotal = order.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
   var delCharge = orderType === 'delivery' && selZone ? parseFloat(selZone) || 0 : 0;
@@ -1157,6 +1232,8 @@ function App() {
       total: grand,
       orderType: orderType,
       paymentType: paymentType,
+      scheduleType: scheduleType,
+      scheduleTime: scheduleType === 'scheduled' ? scheduleTime : '',
       time: new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}),
       date: new Date().toLocaleDateString('en-GB')
     };
@@ -1165,6 +1242,8 @@ function App() {
     setCustomer({name:'',phone:'',address:'',notes:''});
     setSelZone(null);
     setPaymentType('cash');
+    setScheduleType('asap');
+    setScheduleTime('');
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
@@ -1206,7 +1285,7 @@ function App() {
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
