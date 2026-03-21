@@ -335,7 +335,7 @@ function MenuScreen(props) {
 
   var catsToShow = search.trim()
     ? CATS.filter(function(c){ return getCatItems(c).length > 0; })
-    : (activeCat === 'All' ? CATS : [activeCat]);
+    : CATS;
 
   function scrollTo(cat) {
     setActiveCat(cat);
@@ -343,7 +343,11 @@ function MenuScreen(props) {
     setTimeout(function() {
       var el = catRefs.current[cat];
       var sc = document.getElementById('mscroll');
-      if (el && sc) sc.scrollTop = el.offsetTop - 44;
+      if (el && sc) {
+        var elRect = el.getBoundingClientRect();
+        var scRect = sc.getBoundingClientRect();
+        sc.scrollTop = sc.scrollTop + (elRect.top - scRect.top);
+      }
     }, 40);
   }
 
@@ -437,7 +441,7 @@ function MenuScreen(props) {
       ref: function(el){ catRefs.current[cat] = el; },
       style:{marginBottom:14}
     },
-      h('div', {style:{display:'flex', alignItems:'center', gap:8, marginBottom:6, position:'sticky', top:0, background:C.bg, padding:'6px 2px', zIndex:2, borderBottom:'2px solid ' + C.border}},
+      h('div', {style:{display:'flex', alignItems:'center', gap:8, marginBottom:8, padding:'6px 2px', borderBottom:'2px solid ' + C.border, position: isDesktop ? 'sticky' : 'static', top: isDesktop ? 0 : 'auto', background: isDesktop ? C.bg : 'transparent', zIndex: isDesktop ? 2 : 'auto'}},
         h('span', {style:{fontSize:18}}, ICONS[cat]),
         h('span', {style:{fontSize:13,fontWeight:800,color:C.accent,letterSpacing:1.5,textTransform:'uppercase'}}, cat)
       ),
@@ -460,7 +464,7 @@ function MenuScreen(props) {
     ),
     h('div', {
       id: 'mscroll',
-      style:{flex:1,overflowY:'auto',overflowX:'hidden',WebkitOverflowScrolling:'touch',padding:'10px 10px 20px'}
+      style:{flex:1,overflowY:'auto',overflowX:'hidden',WebkitOverflowScrolling:'touch',padding: isDesktop ? '10px 10px 20px' : '0 10px 20px'}
     },
       catNodes,
       catsToShow.length === 0 && h('div', {style:{textAlign:'center',padding:'60px 20px',color:C.muted}},
