@@ -594,9 +594,18 @@ function BasketScreen(props) {
       ),
       scheduleType === 'scheduled' && h('input', {
         type:'text',
-        placeholder:'e.g. 6:30pm, 18:30, 7pm...',
+        inputMode:'numeric',
+        placeholder:'e.g. 6:30, 18:30, 7...',
         value: scheduleTime,
         onChange: function(e){ setScheduleTime(e.target.value); },
+        onBlur: function(e){
+          var v = e.target.value.trim();
+          if (!v) return;
+          var lower = v.toLowerCase();
+          if (lower.indexOf('am') === -1 && lower.indexOf('pm') === -1) {
+            setScheduleTime(v + 'pm');
+          }
+        },
         style:{width:'100%', background:C.bg, border:'1px solid ' + C.accent, borderRadius:10, padding:'11px 13px', color:C.text, fontSize:15, outline:'none'}
       })
     ),
