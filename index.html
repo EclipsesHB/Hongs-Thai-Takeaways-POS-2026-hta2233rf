@@ -290,9 +290,6 @@ function printReceipt(ord, paperSize, copies) {
     line('TOTAL', '\u00a3' + ord.total.toFixed(2)).replace(/ /g, '&nbsp;') + '</div>');
   div();
   blank();
-  html.push('<div style="text-align:center;">Thank you for your order!</div>');
-  html.push('<div style="text-align:center;">hongsthaitakeaway.co.uk</div>');
-  blank();
   blank();
   document.getElementById('receipt-frame').innerHTML = html.join('');
   // Print numCopies times with a short delay between each
@@ -1349,9 +1346,7 @@ function App() {
         tab==='backupm' && h(BackupRestore, backupProps),
         tab==='histm'   && h(HistoryView, historyProps)
       )
-    ),
-    /* Branding at BOTTOM */
-    header
+    )
   );
 }
 
