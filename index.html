@@ -185,7 +185,7 @@ function printReceipt(ord, paperSize, copies) {
   // Inject correct print CSS dynamically
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 15mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;page-break-inside:avoid;-webkit-print-color-adjust:exact;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;-webkit-print-color-adjust:exact;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -292,13 +292,16 @@ function printReceipt(ord, paperSize, copies) {
   blank();
   blank();
 
-  /* Build final document: duplicate receipt content for each copy, separated by a cut marker */
+  /* Build final document: duplicate receipt for each copy with blank feed between them */
   var singleReceipt = html.join('');
   var allCopies = [];
   for (var ci = 0; ci < numCopies; ci++) {
-    allCopies.push('<div style="page-break-inside:avoid;">' + singleReceipt + '</div>');
+    allCopies.push(singleReceipt);
     if (ci < numCopies - 1) {
-      allCopies.push('<div style="page-break-after:always;"></div>');
+      /* Extra blank lines between copies so they can be torn apart easily */
+      allCopies.push('<div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div>');
+      allCopies.push('<hr class="rhr"/>');
+      allCopies.push('<div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div>');
     }
   }
   document.getElementById('receipt-frame').innerHTML = allCopies.join('');
@@ -372,7 +375,7 @@ function MenuScreen(props) {
   }
 
   var pillRow = h('div', {
-    style:{display:'flex',gap:6,padding:'0 12px 8px',overflowX:'auto',WebkitOverflowScrolling:'touch'}
+    style:{display:'flex',gap:5,padding:'0 8px 8px',flexWrap:'wrap'}
   }, ['All'].concat(CATS).map(function(cat) {
     var active = cat === 'All' ? activeCat === 'All' : cat === activeCat;
     return h('button', {
@@ -383,11 +386,11 @@ function MenuScreen(props) {
         else scrollTo(cat);
       },
       style:{
-        padding:'8px 14px', borderRadius:8,
+        padding:'6px 10px', borderRadius:8,
         border:'1px solid ' + (active ? C.accent : C.border),
         background: active ? C.accent : 'transparent',
         color: active ? C.bg : C.muted,
-        fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0
+        fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
       }
     }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
   }));
@@ -615,7 +618,7 @@ function BasketScreen(props) {
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'CUSTOMER'),
       h('input', {style:inp, type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value}); }); }}),
       h('input', {style:inp, type:'tel', inputMode:'numeric', placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
-      orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value}); }); }}),
+      orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none',textTransform:'uppercase'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value.toUpperCase()}); }); }}),
       h('textarea', {style:Object.assign({},inp,{marginBottom:8,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }}),
       /* Payment type */
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'PAYMENT'),
