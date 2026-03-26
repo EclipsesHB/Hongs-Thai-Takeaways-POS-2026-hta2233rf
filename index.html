@@ -291,14 +291,18 @@ function printReceipt(ord, paperSize, copies) {
   div();
   blank();
   blank();
-  document.getElementById('receipt-frame').innerHTML = html.join('');
-  // Print numCopies times with a short delay between each
-  function doPrint(i) {
-    if (i >= numCopies) return;
-    window.print();
-    if (i < numCopies - 1) setTimeout(function(){ doPrint(i + 1); }, 800);
+
+  /* Build final document: duplicate receipt content for each copy, separated by a cut marker */
+  var singleReceipt = html.join('');
+  var allCopies = [];
+  for (var ci = 0; ci < numCopies; ci++) {
+    allCopies.push('<div style="page-break-inside:avoid;">' + singleReceipt + '</div>');
+    if (ci < numCopies - 1) {
+      allCopies.push('<div style="page-break-after:always;"></div>');
+    }
   }
-  doPrint(0);
+  document.getElementById('receipt-frame').innerHTML = allCopies.join('');
+  window.print();
 }
 
 /* ── GROUP MENU ITEMS BY VARIANT GROUP ── */
