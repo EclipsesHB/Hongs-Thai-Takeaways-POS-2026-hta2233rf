@@ -96,7 +96,8 @@ var MENU = [
   {id:193,num:'19', name:'Yellow Curry — Veg (V)',                cat:'Curry', grp:'Yellow Curry',          price:8.95},
 
   {id:20, num:'20', name:'Pad Khing — Duck',                      cat:'Stir Fried', grp:'Pad Khing',              price:11.50},
-  {id:201,num:'20', name:'Pad Khing — Prawn/Beef',                cat:'Stir Fried', grp:'Pad Khing',              price:10.50},
+  {id:201,num:'20', name:'Pad Khing — Prawn',                  cat:'Stir Fried', grp:'Pad Khing',              price:10.50},
+  {id:901,num:'20', name:'Pad Khing — Beef',                   cat:'Stir Fried', grp:'Pad Khing',              price:10.50},
   {id:202,num:'20', name:'Pad Khing — Chicken',              cat:'Stir Fried', grp:'Pad Khing',              price:9.50},
   {id:702,num:'20', name:'Pad Khing — Pork',                 cat:'Stir Fried', grp:'Pad Khing',              price:9.50},
   {id:203,num:'20', name:'Pad Khing — Veg (V)',                   cat:'Stir Fried', grp:'Pad Khing',              price:8.95},
@@ -392,27 +393,6 @@ function MenuScreen(props) {
     }, 80);
   }
 
-  var pillRow = h('div', {
-    style:{display:'flex',gap:5,padding:'0 8px 8px',flexWrap:'wrap'}
-  }, ['All'].concat(CATS).map(function(cat) {
-    var active = cat === 'All' ? activeCat === 'All' : cat === activeCat;
-    return h('button', {
-      key: cat,
-      className: 'mbtn',
-      onClick: function() {
-        if (cat === 'All') { setActiveCat('All'); document.getElementById('mscroll').scrollTop = 0; }
-        else scrollTo(cat);
-      },
-      style:{
-        padding:'6px 10px', borderRadius:8,
-        border:'1px solid ' + (active ? C.accent : C.border),
-        background: active ? C.accent : 'transparent',
-        color: active ? C.bg : C.muted,
-        fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
-      }
-    }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
-  }));
-
   var catNodes = catsToShow.map(function(cat) {
     var catItems = getCatItems(cat);
     if (!catItems.length) return null;
@@ -495,26 +475,48 @@ function MenuScreen(props) {
   var searchOpen = searchOpenState[0];
   var setSearchOpen = searchOpenState[1];
 
-  var searchBar = h('div', {style:{background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0}},
-    h('div', {style:{padding:'6px 10px', display:'flex', alignItems:'center', gap:8}},
-      h('button', {
-        className:'mbtn',
-        onClick: function(){
-          if (searchOpen) { setSearch(''); setActiveCat('All'); }
-          setSearchOpen(!searchOpen);
-        },
-        style:{flexShrink:0, width:36, height:36, borderRadius:9, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize:16, display:'flex', alignItems:'center', justifyContent:'center'}
-      }, '🔍'),
-      searchOpen && h('input', {
-        value: search,
-        autoFocus: true,
-        onChange: function(e){ setSearch(e.target.value); setActiveCat('All'); },
-        placeholder: 'Search menu...',
-        style:{flex:1, background:C.bg, border:'1px solid ' + C.border, borderRadius:9, padding:'8px 12px', color:C.text, fontSize:14, outline:'none'}
-      })
-    ),
-    !search.trim() && pillRow
+  /* Single row: 🔍 icon + pills (or search input when open) */
+  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding:'5px 8px', display:'flex', alignItems:'center', gap:5, flexWrap:'wrap'}},
+    /* Search icon toggle button */
+    h('button', {
+      className:'mbtn',
+      onClick: function(){
+        if (searchOpen) { setSearch(''); setActiveCat('All'); }
+        setSearchOpen(!searchOpen);
+      },
+      style:{flexShrink:0, width:30, height:28, borderRadius:7, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center'}
+    }, '🔍'),
+    /* When search open: expand input across row */
+    searchOpen
+      ? h('input', {
+          value: search,
+          autoFocus: true,
+          onChange: function(e){ setSearch(e.target.value); setActiveCat('All'); },
+          onKeyDown: function(e){ if(e.key==='Escape'){ setSearch(''); setActiveCat('All'); setSearchOpen(false); } },
+          placeholder: 'Search menu...',
+          style:{flex:1, minWidth:100, background:C.bg, border:'1px solid ' + C.accent, borderRadius:7, padding:'5px 10px', color:C.text, fontSize:13, outline:'none'}
+        })
+      /* When closed: show category pills inline */
+      : ['All'].concat(CATS).map(function(cat) {
+          var active = cat === 'All' ? activeCat === 'All' : cat === activeCat;
+          return h('button', {
+            key: cat,
+            className: 'mbtn',
+            onClick: function() {
+              if (cat === 'All') { setActiveCat('All'); document.getElementById('mscroll').scrollTop = 0; }
+              else scrollTo(cat);
+            },
+            style:{
+              padding:'5px 9px', borderRadius:7,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accent : 'transparent',
+              color: active ? C.bg : C.muted,
+              fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
+            }
+          }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
+        })
   );
+
   return h('div', {style:{display:'flex',flexDirection:'column',height:'100%',minHeight:0}},
     searchBar,
     h('div', {
