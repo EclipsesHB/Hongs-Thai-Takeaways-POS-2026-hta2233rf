@@ -9,7 +9,8 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;background:#1a1a1a;}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#e8e8e8;-webkit-tap-highlight-color:transparent;overflow:hidden;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#e8e8e8;-webkit-tap-highlight-color:transparent;overflow:hidden;position:fixed;width:100%;top:0;left:0;}
+#root{height:100%;overflow:hidden;}
 input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:0;}
 ::-webkit-scrollbar{width:3px;height:3px;}
 ::-webkit-scrollbar-thumb{background:#444;border-radius:3px;}
@@ -26,7 +27,7 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
 </style>
 </head>
 <body>
-<div id="root" style="height:100%;"></div>
+<div id="root"></div>
 <div id="receipt-frame"></div>
 <script>
 'use strict';
@@ -476,7 +477,7 @@ function MenuScreen(props) {
   var setSearchOpen = searchOpenState[1];
 
   /* Single row: 🔍 icon + pills (or search input when open) */
-  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding:'5px 8px', display:'flex', alignItems:'center', gap:5, flexWrap:'wrap'}},
+  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding: isDesktop ? '6px 10px' : '5px 8px', display:'flex', alignItems:'center', gap:5, flexWrap:'wrap'}},
     /* Search icon toggle button */
     h('button', {
       className:'mbtn',
@@ -484,7 +485,7 @@ function MenuScreen(props) {
         if (searchOpen) { setSearch(''); setActiveCat('All'); }
         setSearchOpen(!searchOpen);
       },
-      style:{flexShrink:0, width:30, height:28, borderRadius:7, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center'}
+      style:{flexShrink:0, width: isDesktop ? 34 : 30, height: isDesktop ? 32 : 28, borderRadius:7, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize: isDesktop ? 15 : 13, display:'flex', alignItems:'center', justifyContent:'center'}
     }, '🔍'),
     /* When search open: expand input across row */
     searchOpen
@@ -507,11 +508,12 @@ function MenuScreen(props) {
               else scrollTo(cat);
             },
             style:{
-              padding:'5px 9px', borderRadius:7,
+              padding: isDesktop ? '7px 13px' : '5px 9px',
+              borderRadius:7,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accent : 'transparent',
               color: active ? C.bg : C.muted,
-              fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
+              fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
             }
           }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
         })
@@ -802,6 +804,7 @@ function MenuEditor(props) {
     h('div', {style:{background:C.card,borderRadius:12,padding:14,marginBottom:18,border:'1px solid ' + C.border}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:10,letterSpacing:1.5}}, 'ADD ITEM'),
       h('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
+        h('input', {placeholder:'#No', value:newItem.num||'', onChange:function(e){ setNewItem(function(p){ return Object.assign({},p,{num:e.target.value}); }); }, onKeyDown:function(e){ if(e.key==='Enter') addItem(); }, style:Object.assign({},smInp,{flex:'0 0 60px'})}),
         h('input', {placeholder:'Dish name', value:newItem.name, onChange:function(e){ setNewItem(function(p){ return Object.assign({},p,{name:e.target.value}); }); }, onKeyDown:function(e){ if(e.key==='Enter') addItem(); }, style:Object.assign({},smInp,{flex:'2 1 130px'})}),
         h('input', {placeholder:'\u00a3 Price', value:newItem.price, type:'number', step:'0.50', min:'0', onChange:function(e){ setNewItem(function(p){ return Object.assign({},p,{price:e.target.value}); }); }, onKeyDown:function(e){ if(e.key==='Enter') addItem(); }, style:Object.assign({},smInp,{flex:'0 0 80px'})}),
         h('select', {value:newItem.cat, onChange:function(e){ setNewItem(function(p){ return Object.assign({},p,{cat:e.target.value}); }); }, style:Object.assign({},smInp,{flex:'1 1 110px'})},
@@ -821,6 +824,7 @@ function MenuEditor(props) {
         items.map(function(item) {
           return h('div', {key:item.id, style:{background:C.card,borderRadius:8,padding:'8px 10px',marginBottom:4,border:'1px solid ' + C.border,display:'flex',alignItems:'center',gap:7,flexWrap:'wrap'}},
             editItem && editItem.id === item.id ? h(React.Fragment, null,
+              h('input', {value:editItem.num||'', placeholder:'#No', onChange:function(e){ setEditItem(function(p){ return Object.assign({},p,{num:e.target.value}); }); }, style:{flex:'0 0 55px',background:C.bg,border:'1px solid ' + C.accent,borderRadius:6,padding:'6px 9px',color:C.text,fontSize:13,outline:'none'}}),
               h('input', {value:editItem.name, onChange:function(e){ setEditItem(function(p){ return Object.assign({},p,{name:e.target.value}); }); }, style:{flex:'2 1 120px',background:C.bg,border:'1px solid ' + C.accent,borderRadius:6,padding:'6px 9px',color:C.text,fontSize:13,outline:'none'}}),
               h('input', {value:editItem.price||'', type:'number', onChange:function(e){ setEditItem(function(p){ return Object.assign({},p,{price:e.target.value}); }); }, style:{flex:'0 0 70px',background:C.bg,border:'1px solid ' + C.accent,borderRadius:6,padding:'6px 9px',color:C.text,fontSize:13,outline:'none'}}),
               h('input', {value:editItem.grp||'', placeholder:'Group', onChange:function(e){ setEditItem(function(p){ return Object.assign({},p,{grp:e.target.value||undefined}); }); }, style:{flex:'2 1 100px',background:C.bg,border:'1px solid ' + C.accent,borderRadius:6,padding:'6px 9px',color:C.text,fontSize:13,outline:'none'}}),
@@ -829,7 +833,9 @@ function MenuEditor(props) {
             ) : h(React.Fragment, null,
               h('div', {style:{flex:1,minWidth:0}},
                 h('span', {style:{fontWeight:600,fontSize:13}}, item.name),
-                item.grp && h('div', {style:{fontSize:10,color:C.muted,marginTop:1}}, 'Group: ' + item.grp)
+                h('div', {style:{fontSize:10,color:C.muted,marginTop:1}},
+                  '#' + (item.num||'—') + (item.grp ? ' · Group: ' + item.grp : '')
+                )
               ),
               h('span', {style:{color:C.accent,fontWeight:700,fontSize:13,flexShrink:0}}, '\u00a3' + item.price.toFixed(2)),
               h('button', {className:'mbtn', onClick:function(){ setEditItem(Object.assign({},item)); }, style:{padding:'4px 10px',borderRadius:6,border:'1px solid ' + C.border,background:'transparent',color:C.muted,cursor:'pointer',fontSize:12}}, 'Edit'),
@@ -1264,7 +1270,7 @@ function App() {
   var activeCatState = useState('All'); var activeCat = activeCatState[0]; var setActiveCat = activeCatState[1];
   var searchState = useState(''); var search = searchState[0]; var setSearch = searchState[1];
   var showOkState = useState(false); var showOk = showOkState[0]; var setShowOk = showOkState[1];
-  var newItemState = useState({name:'',price:'',cat:'Starters',grp:''}); var newItem = newItemState[0]; var setNewItem = newItemState[1];
+  var newItemState = useState({name:'',price:'',cat:'Starters',grp:'',num:''}); var newItem = newItemState[0]; var setNewItem = newItemState[1];
   var editItemState = useState(null); var editItem = editItemState[0]; var setEditItem = editItemState[1];
   var newZoneState = useState({area:'',price:''}); var newZone = newZoneState[0]; var setNewZone = newZoneState[1];
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
@@ -1347,8 +1353,9 @@ function App() {
   function addItem() {
     if (!newItem.name.trim() || !newItem.price) return;
     var grpVal = newItem.grp ? newItem.grp.trim() : '';
-    setMenuItems(function(p){ return p.concat([Object.assign({},newItem,{id:Date.now(),num:'—',price:parseFloat(newItem.price),grp:grpVal||undefined})]); });
-    setNewItem({name:'',price:'',cat:newItem.cat,grp:newItem.grp});
+    var numVal = newItem.num ? newItem.num.trim() : '—';
+    setMenuItems(function(p){ return p.concat([Object.assign({},newItem,{id:Date.now(),num:numVal,price:parseFloat(newItem.price),grp:grpVal||undefined})]); });
+    setNewItem({name:'',price:'',cat:newItem.cat,grp:newItem.grp,num:''});
   }
   function delItem(id) { if (window.confirm('Delete item?')) setMenuItems(function(p){ return p.filter(function(i){ return i.id!==id; }); }); }
   function saveItem() { setMenuItems(function(p){ return p.map(function(i){ return i.id===editItem.id ? Object.assign({},editItem,{price:parseFloat(editItem.price)}) : i; }); }); setEditItem(null); }
@@ -1385,7 +1392,7 @@ function App() {
   /* ── DESKTOP ── */
   if (isDesktop) {
     var desktopTabs = [['order','🛒 New Order'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['history','📋 History'],['backup','⚙️ Settings & Backup']];
-    return h('div', {style:{height:'100vh',display:'flex',flexDirection:'column',overflow:'hidden'}},
+    return h('div', {style:{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},
       header,
       h('div', {style:{display:'flex',background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0,overflowX:'auto'}},
         desktopTabs.map(function(t) {
