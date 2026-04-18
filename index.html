@@ -201,7 +201,7 @@ function printReceipt(ord, paperSize, copies) {
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
   /* font-weight:bold on receipt-frame makes ALL text bold by default for clearer thermal printing */
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;word-break:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 2mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -268,10 +268,10 @@ function printReceipt(ord, paperSize, copies) {
     var extraAmt = parseFloat(item.extra) || 0;
     var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
     var qtyStr = 'x' + item.qty;
-    /* Name on left, qty+amount pinned to right — always same line */
+    /* Name on left, qty+amount pinned to right — always same line, words wrap naturally */
     html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
-      '<span style="word-break:break-word;flex:1;">' + item.name.replace(/ /g,'&nbsp;') + '</span>' +
-      '<span style="white-space:nowrap;padding-left:4px;">' + qtyStr + '&nbsp;&nbsp;' + amtStr + '</span>' +
+      '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + item.name + '</span>' +
+      '<span style="white-space:nowrap;padding-left:6px;">' + qtyStr + '&nbsp;&nbsp;' + amtStr + '</span>' +
       '</div>');
     if (extraAmt > 0) {
       row('  + Extra: \u00a3' + extraAmt.toFixed(2));
@@ -300,20 +300,19 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>' + totalAmt + '</span></div>');
   div();
-  blank();
-  blank();
+  /* NO trailing blank lines — printer stops feeding immediately after the divider */
 
-  /* Build final document: duplicate receipt for each copy with blank feed between them */
+  /* Build final document: duplicate receipt for each copy.
+     Between copies use a CSS margin-top on a divider so paper feeds enough to tear,
+     without sending blank HTML content that confuses the printer into feeding endlessly. */
   var singleReceipt = html.join('');
   var allCopies = [];
   for (var ci = 0; ci < numCopies; ci++) {
-    allCopies.push(singleReceipt);
-    if (ci < numCopies - 1) {
-      /* Extra blank lines between copies so they can be torn apart easily */
-      allCopies.push('<div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div>');
-      allCopies.push('<hr class="rhr"/>');
-      allCopies.push('<div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div><div>&nbsp;</div>');
+    if (ci > 0) {
+      /* Tear gap between copies: margin gives physical space without blank content */
+      allCopies.push('<hr class="rhr" style="margin:8mm 0 6mm;"/>');
     }
+    allCopies.push(singleReceipt);
   }
   document.getElementById('receipt-frame').innerHTML = allCopies.join('');
   window.print();
