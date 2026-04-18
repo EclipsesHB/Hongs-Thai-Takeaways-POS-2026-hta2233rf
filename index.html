@@ -189,18 +189,19 @@ var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','
 /* ── RECEIPT PRINTER ── */
 function printReceipt(ord, paperSize, copies) {
   var is58 = paperSize === '58';
-  var W = is58 ? 24 : 32;
+  var W = is58 ? 26 : 36;
   var mmSize = is58 ? '58mm' : '80mm';
   var mmWidth = is58 ? '50mm' : '72mm';
-  var fontSize = is58 ? '11px' : '12px';
-  var lineH = is58 ? '1.5' : '1.6';
+  var fontSize = is58 ? '13px' : '15px';
+  var lineH = is58 ? '1.6' : '1.7';
   var padTop = is58 ? '3mm' : '4mm';
   var numCopies = parseInt(copies, 10) || 1;
 
   // Inject correct print CSS dynamically
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;-webkit-print-color-adjust:exact;}}';
+  /* font-weight:bold on receipt-frame makes ALL text bold by default for clearer thermal printing */
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;-webkit-print-color-adjust:exact;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -305,7 +306,7 @@ function printReceipt(ord, paperSize, copies) {
     row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
     div();
   }
-  var totalFontSize = is58 ? '12px' : '14px';
+  var totalFontSize = is58 ? '15px' : '17px';
   html.push('<div style="font-size:' + totalFontSize + ';font-weight:bold;">' +
     line('TOTAL', '\u00a3' + ord.total.toFixed(2)).replace(/ /g, '&nbsp;') + '</div>');
   div();
