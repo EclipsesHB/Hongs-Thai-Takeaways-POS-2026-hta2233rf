@@ -201,7 +201,7 @@ function printReceipt(ord, paperSize, copies) {
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
   /* font-weight:bold on receipt-frame makes ALL text bold by default for clearer thermal printing */
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;-webkit-print-color-adjust:exact;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;word-break:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -261,31 +261,18 @@ function printReceipt(ord, paperSize, copies) {
     if (cur) rowb(cur);
   }
   div();
-  row('ITEM' + ' '.repeat(W - 4 - 2 - 5) + 'QT' + ' '.repeat(2) + 'AMT');
+  /* Use a simpler flex-style layout for items so qty+amount are always on the same line */
+  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>ITEM</span><span>QTY&nbsp;&nbsp;AMT</span></div>');
   div();
   ord.items.forEach(function(item) {
-    var qtyStr = 'x' + item.qty;
     var extraAmt = parseFloat(item.extra) || 0;
     var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
-    var suffix = ' ' + qtyStr.padEnd(3) + amtStr.padStart(5);
-    var maxNameW = W - suffix.length;
-    var name = item.name;
-    if (name.length <= maxNameW) {
-      row(name.padEnd(maxNameW) + suffix);
-    } else {
-      var ws = name.split(' ');
-      var lines = [];
-      var c = '';
-      ws.forEach(function(w) {
-        if ((c + (c ? ' ' : '') + w).length <= maxNameW) { c = c + (c ? ' ' : '') + w; }
-        else { if (c) lines.push(c); c = w; }
-      });
-      if (c) lines.push(c);
-      lines.forEach(function(l, i) {
-        if (i < lines.length - 1) row(l);
-        else row(l.padEnd(maxNameW) + suffix);
-      });
-    }
+    var qtyStr = 'x' + item.qty;
+    /* Name on left, qty+amount pinned to right — always same line */
+    html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
+      '<span style="word-break:break-word;flex:1;">' + item.name.replace(/ /g,'&nbsp;') + '</span>' +
+      '<span style="white-space:nowrap;padding-left:4px;">' + qtyStr + '&nbsp;&nbsp;' + amtStr + '</span>' +
+      '</div>');
     if (extraAmt > 0) {
       row('  + Extra: \u00a3' + extraAmt.toFixed(2));
     }
@@ -306,9 +293,12 @@ function printReceipt(ord, paperSize, copies) {
     row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
     div();
   }
+  /* Recalculate total fresh as safety net — never missing even if ord.total is wrong */
+  var safeTotal = (parseFloat(ord.foodTotal) || 0) + (parseFloat(ord.deliveryCharge) || 0);
+  var totalAmt = '\u00a3' + safeTotal.toFixed(2);
   var totalFontSize = is58 ? '15px' : '17px';
-  html.push('<div style="font-size:' + totalFontSize + ';font-weight:bold;">' +
-    line('TOTAL', '\u00a3' + ord.total.toFixed(2)).replace(/ /g, '&nbsp;') + '</div>');
+  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
+    '<span>TOTAL</span><span>' + totalAmt + '</span></div>');
   div();
   blank();
   blank();
@@ -1021,7 +1011,7 @@ function HistoryView(props) {
                 return h('div', {key:i, style:{marginBottom:4}},
                   h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:13}},
                     h('span', null, item.name + ' \u00d7 ' + item.qty),
-                    h('span', {style:{color:C.accent}}, '\u00a3' + (item.price * item.qty).toFixed(2))
+                    h('span', {style:{color:C.accent}}, '\u00a3' + (item.price * item.qty + (parseFloat(item.extra)||0)).toFixed(2))
                   ),
                   item.comment && item.comment.trim() && h('div', {style:{fontSize:11,color:'#c8a060',paddingLeft:8}}, '↳ ' + item.comment.trim())
                 );
