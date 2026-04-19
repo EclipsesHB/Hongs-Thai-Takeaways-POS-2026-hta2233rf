@@ -242,7 +242,12 @@ function printReceipt(ord, paperSize) {
     if (ord.customer.address) {
       var addrLines = ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean);
       addrLines.forEach(function(part, i) {
-        row((i === 0 ? 'Addr : ' : '       ') + part);
+        var label = i === 0 ? 'Addr : ' : '       ';
+        /* Use flex row so long words wrap at word boundaries, not mid-character */
+        html.push('<div class="rflex" style="display:flex;gap:4px;overflow-wrap:break-word;word-break:normal;">' +
+          '<span style="white-space:nowrap;">' + label + '</span>' +
+          '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + part + '</span>' +
+          '</div>');
       });
     } else {
       row('Addr : ');
@@ -465,7 +470,7 @@ function MenuScreen(props) {
         if (searchOpen) { setSearch(''); setActiveCat('All'); }
         setSearchOpen(!searchOpen);
       },
-      style:{flexShrink:0, width: isDesktop ? 34 : 30, height: isDesktop ? 32 : 28, borderRadius:7, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize: isDesktop ? 15 : 13, display:'flex', alignItems:'center', justifyContent:'center'}
+      style:{flexShrink:0, width: isDesktop ? 38 : 30, height: isDesktop ? 36 : 28, borderRadius:7, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize: isDesktop ? 16 : 13, display:'flex', alignItems:'center', justifyContent:'center'}
     }, '🔍'),
     /* When search open: expand input across row */
     searchOpen
@@ -488,12 +493,12 @@ function MenuScreen(props) {
               else scrollTo(cat);
             },
             style:{
-              padding: isDesktop ? '7px 13px' : '5px 9px',
+              padding: isDesktop ? '9px 16px' : '5px 9px',
               borderRadius:7,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accent : 'transparent',
               color: active ? C.bg : C.muted,
-              fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
+              fontSize: isDesktop ? 14 : 11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
             }
           }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
         })
@@ -655,7 +660,7 @@ function BasketScreen(props) {
             setScheduleTime(stripped + (lower.indexOf('am') !== -1 ? 'am' : 'pm'));
           }
         },
-        style:{width:'100%', background:C.bg, border:'1px solid ' + C.accent, borderRadius:10, padding:'11px 13px', color:C.text, fontSize:15, outline:'none'}
+        style:{width:'100%', background:C.bg, border:'1px solid ' + C.accent, borderRadius:10, padding:'11px 13px', color:C.accent, fontSize:18, fontWeight:800, outline:'none'}
       })
     ),
     /* Customer */
@@ -776,8 +781,8 @@ function BasketScreen(props) {
     /* Pinned bottom: total + button */
     h('div', {style:{flexShrink:0,padding:'10px 12px 12px',borderTop:'1px solid ' + C.border,background:C.panel}},
       h('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}},
-        h('span', {style:{fontWeight:700,fontSize:18}}, 'TOTAL'),
-        h('span', {style:{fontWeight:800,fontSize:24,color:C.accent}}, '\u00a3' + grandTotal.toFixed(2))
+        h('span', {style:{fontWeight:900,fontSize:22,letterSpacing:1}}, 'TOTAL'),
+        h('span', {style:{fontWeight:900,fontSize:28,color:C.accent}}, '\u00a3' + grandTotal.toFixed(2))
       ),
       h('button', {
         className:'mbtn', onClick:onSubmit, disabled:!order.length,
@@ -1045,7 +1050,7 @@ function HistoryView(props) {
               ),
               h('div', {style:{display:'flex',justifyContent:'space-between',fontWeight:800,fontSize:15,marginTop:7,paddingTop:7,borderTop:'1px solid ' + C.border}},
                 h('span', null, 'TOTAL'),
-                h('span', {style:{color:C.accent}}, '\u00a3' + ord.total.toFixed(2))
+                h('span', {style:{color:C.accent}}, '\u00a3' + ((ord.total || (ord.foodTotal||0) + (ord.deliveryCharge||0)) || 0).toFixed(2))
               )
             )
           ),
