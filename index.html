@@ -300,17 +300,18 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>' + totalAmt + '</span></div>');
   div();
-  /* NO trailing blank lines — printer stops feeding immediately after the divider */
+  /* Small feed after TOTAL so there is room to tear — 3 blank lines is enough */
+  blank(); blank(); blank();
 
   /* Build final document: duplicate receipt for each copy.
-     Between copies use a CSS margin-top on a divider so paper feeds enough to tear,
+     Between copies use a CSS margin on a divider so paper feeds enough to tear,
      without sending blank HTML content that confuses the printer into feeding endlessly. */
   var singleReceipt = html.join('');
   var allCopies = [];
   for (var ci = 0; ci < numCopies; ci++) {
     if (ci > 0) {
       /* Tear gap between copies: margin gives physical space without blank content */
-      allCopies.push('<hr class="rhr" style="margin:8mm 0 6mm;"/>');
+      allCopies.push('<hr class="rhr" style="margin:6mm 0 4mm;"/>');
     }
     allCopies.push(singleReceipt);
   }
