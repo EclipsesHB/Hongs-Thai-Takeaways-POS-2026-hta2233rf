@@ -187,7 +187,7 @@ var DEF_ZONES = [
 var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'];
 
 /* ── RECEIPT PRINTER ── */
-function printReceipt(ord, paperSize, copies) {
+function printReceipt(ord, paperSize) {
   var is58 = paperSize === '58';
   var W = is58 ? 26 : 36;
   var mmSize = is58 ? '58mm' : '80mm';
@@ -195,8 +195,7 @@ function printReceipt(ord, paperSize, copies) {
   var fontSize = is58 ? '13px' : '15px';
   var lineH = is58 ? '1.6' : '1.7';
   var padTop = is58 ? '3mm' : '4mm';
-  var numCopies = parseInt(copies, 10) || 1;
-
+  var mmSize = is58 ? '58mm' : '80mm';
   // Inject correct print CSS dynamically
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
@@ -300,22 +299,11 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>' + totalAmt + '</span></div>');
   div();
-  /* Small feed after TOTAL so there is room to tear — 3 blank lines is enough */
-  blank(); blank(); blank();
+  /* Feed lines after TOTAL so there is room to tear the receipt */
+  blank(); blank(); blank(); blank(); blank();
 
-  /* Build final document: duplicate receipt for each copy.
-     Between copies use a CSS margin on a divider so paper feeds enough to tear,
-     without sending blank HTML content that confuses the printer into feeding endlessly. */
-  var singleReceipt = html.join('');
-  var allCopies = [];
-  for (var ci = 0; ci < numCopies; ci++) {
-    if (ci > 0) {
-      /* Tear gap between copies: margin gives physical space without blank content */
-      allCopies.push('<hr class="rhr" style="margin:6mm 0 4mm;"/>');
-    }
-    allCopies.push(singleReceipt);
-  }
-  document.getElementById('receipt-frame').innerHTML = allCopies.join('');
+  /* Single copy — printer service handles copy count externally */
+  document.getElementById('receipt-frame').innerHTML = html.join('');
   window.print();
 }
 
@@ -671,7 +659,7 @@ function BasketScreen(props) {
     /* Customer */
     h('div', {style:{marginBottom:12}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'CUSTOMER'),
-      h('input', {style:inp, type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value}); }); }}),
+      h('input', {style:Object.assign({},inp,{textTransform:'uppercase'}), type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value.toUpperCase()}); }); }}),
       h('input', {style:inp, type:'tel', inputMode:'numeric', placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
       orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none',textTransform:'uppercase'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value.toUpperCase()}); }); }}),
       h('textarea', {style:Object.assign({},inp,{marginBottom:8,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }}),
@@ -682,7 +670,7 @@ function BasketScreen(props) {
           var active = paymentType === t;
           return h('button', {
             key:t, className:'mbtn',
-            onClick: function(){ setPaymentType(t); },
+            onClick: function(){ setPaymentType(active ? null : t); },
             style:{
               flex:1, padding:'11px 8px', borderRadius:10,
               border:'1px solid ' + (active ? C.accent : C.border),
@@ -1212,7 +1200,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        'Prints ' + copies + (copies === '1' ? ' receipt' : ' receipts') + ' automatically on every order'
+        'Set the number of copies in your printer service app — this setting is for reference only.'
       )
     ),
     h('div', {style:card},
@@ -1254,7 +1242,7 @@ function App() {
   var orderState = useState([]); var order = orderState[0]; var setOrder = orderState[1];
   var customerState = useState({name:'',phone:'',address:'',notes:''}); var customer = customerState[0]; var setCustomer = customerState[1];
   var orderTypeState = useState('delivery'); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
-  var paymentTypeState = useState('cash'); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
+  var paymentTypeState = useState(null); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
   var selZoneState = useState(null); var selZone = selZoneState[0]; var setSelZone = selZoneState[1]; /* null or price string e.g. "2.50" */
   var isDesktopState = useState(function(){ return window.innerWidth >= 800; }); var isDesktop = isDesktopState[0]; var setIsDesktop = isDesktopState[1];
   var tabState = useState(function(){ return window.innerWidth >= 800 ? 'order' : 'menu'; }); var tab = tabState[0]; var setTab = tabState[1];
@@ -1332,13 +1320,13 @@ function App() {
     setOrder([]);
     setCustomer({name:'',phone:'',address:'',notes:''});
     setSelZone(null);
-    setPaymentType('cash');
+    setPaymentType(null);
     setScheduleType('asap');
     setScheduleTime('');
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize, copies); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize); }, 150);
   }
 
   function addItem() {
@@ -1376,7 +1364,7 @@ function App() {
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
 
