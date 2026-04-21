@@ -159,8 +159,14 @@ var MENU = [
   {id:50, num:'A', name:'Set Menu A — per person (min 2)', cat:'Set Menus', price:18.95},
   {id:51, num:'B', name:'Set Menu B — per person (min 2)', cat:'Set Menus', price:19.95},
 
-  {id:60, num:'—', name:'Any Main Dish Sauce',             cat:'Misc',      price:4.50},
-  {id:61, num:'—', name:'Custom Item',                      cat:'Misc',      price:0.00,  custom:true}
+  {id:61,  num:'—', name:'Custom Item',          cat:'Misc', price:0.00, custom:true},
+  {id:60,  num:'—', name:'Any Main Dish Sauce',  cat:'Misc', price:4.50},
+  {id:62,  num:'—', name:'Tom Yum / Kha - Chicken', cat:'Misc', price:7.95},
+  {id:63,  num:'—', name:'Tom Yum / Kha - Prawn',   cat:'Misc', price:8.50},
+  {id:64,  num:'—', name:'Satay Sauce Dip',       cat:'Misc', price:0.50},
+  {id:65,  num:'—', name:'Sweet Chilli Sauce Dip',cat:'Misc', price:0.50},
+  {id:66,  num:'—', name:'Hoisin Sauce Dip',      cat:'Misc', price:0.50},
+  {id:67,  num:'—', name:'Sirarcha Sauce',         cat:'Misc', price:0.50}
 ];
 
 var DEF_ZONES = [
@@ -232,28 +238,36 @@ function printReceipt(ord, paperSize) {
     crowb('*** ASAP ***');
     div();
   }
-  row('Date : ' + ord.date);
-  row('Time : ' + ord.time);
-  row('Name : ' + (ord.customer.name || ''));
-  blank();
-  row('Tel  : ' + (ord.customer.phone || ''));
-  blank();
+  /* Big D / C letter on right, info on left — helps chef identify order type instantly */
+  var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
+  var bigLetterFontSize = is58 ? '52px' : '64px';
+  var infoLines = [
+    'Date : ' + ord.date,
+    'Time : ' + ord.time,
+    'Name : ' + (ord.customer.name || ''),
+    '',
+    'Tel  : ' + (ord.customer.phone || '')
+  ];
   if (ord.orderType === 'delivery') {
-    if (ord.customer.address) {
-      var addrLines = ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean);
-      addrLines.forEach(function(part, i) {
-        var label = i === 0 ? 'Addr : ' : '       ';
-        /* Use flex row so long words wrap at word boundaries, not mid-character */
-        html.push('<div class="rflex" style="display:flex;gap:4px;overflow-wrap:break-word;word-break:normal;">' +
-          '<span style="white-space:nowrap;">' + label + '</span>' +
-          '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + part + '</span>' +
-          '</div>');
-      });
-    } else {
-      row('Addr : ');
-    }
-    blank();
+    var addrParts = ord.customer.address
+      ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
+      : [''];
+    infoLines.push('');
+    addrParts.forEach(function(part, i){
+      infoLines.push((i === 0 ? 'Addr : ' : '       ') + part);
+    });
+    infoLines.push('');
   }
+  var infoHtml = infoLines.map(function(l){
+    return '<div style="white-space:pre-wrap;">' + l.replace(/ /g,'&nbsp;') + '</div>';
+  }).join('');
+  html.push(
+    '<div class="rflex" style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+    '<div style="flex:1;">' + infoHtml + '</div>' +
+    '<div style="font-size:' + bigLetterFontSize + ';font-weight:900;line-height:1;padding-left:4px;align-self:center;">' + bigLetter + '</div>' +
+    '</div>'
+  );
+  div();
   if (ord.customer.notes) {
     div();
     row('NOTE:');
@@ -1310,7 +1324,7 @@ function BackupRestore(props) {
 /* ── MAIN APP ── */
 function App() {
   var menuItemsState = useState(function() {
-    try { var s = JSON.parse(localStorage.getItem('hongs_m4') || 'null'); return s && s.length ? s : MENU; } catch(e) { return MENU; }
+    try { var s = JSON.parse(localStorage.getItem('hongs_m5') || 'null'); return s && s.length ? s : MENU; } catch(e) { return MENU; }
   });
   var menuItems = menuItemsState[0]; var setMenuItems = menuItemsState[1];
 
@@ -1346,7 +1360,7 @@ function App() {
   var discountState = useState({type:null, pct:10, custom:''}); var discount = discountState[0]; var setDiscount = discountState[1];
   var catRefs = useRef({});
 
-  useEffect(function(){ localStorage.setItem('hongs_m4', JSON.stringify(menuItems)); }, [menuItems]);
+  useEffect(function(){ localStorage.setItem('hongs_m5', JSON.stringify(menuItems)); }, [menuItems]);
   useEffect(function(){ localStorage.setItem('hongs_z', JSON.stringify(zones)); }, [zones]);
   useEffect(function(){ localStorage.setItem('hongs_o', JSON.stringify(orders)); }, [orders]);
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
