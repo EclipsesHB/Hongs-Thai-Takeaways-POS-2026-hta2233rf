@@ -240,34 +240,40 @@ function printReceipt(ord, paperSize) {
   }
   /* Big D / C letter on right, info on left — helps chef identify order type instantly */
   var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
-  /* Keep letter size modest enough to fit within the paper width without clipping */
   var bigLetterFontSize = is58 ? '42px' : '54px';
-  /* Fixed width for letter column so it never overflows */
   var bigLetterColW = is58 ? '32px' : '42px';
-  var infoLines = [
-    'Date : ' + ord.date,
-    'Time : ' + ord.time,
-    'Name : ' + (ord.customer.name || ''),
-    '', /* blank writing space under Name */
-    'Tel  : ' + (ord.customer.phone || ''),
-    ''  /* blank writing space under Tel */
-  ];
+
+  /* Build info lines — each line uses overflow-wrap so full words move to next line */
+  function infoRow(txt) {
+    return '<div style="overflow-wrap:break-word;word-break:normal;">' + txt + '</div>';
+  }
+  function infoBlank() { return '<div>&nbsp;</div>'; }
+
+  var infoHtml = '';
+  infoHtml += infoRow('Date : ' + ord.date);
+  infoHtml += infoRow('Time : ' + ord.time);
+  infoHtml += infoRow('Name : ' + (ord.customer.name || ''));
+  infoHtml += infoBlank(); infoHtml += infoBlank(); infoHtml += infoBlank();
+  infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
+  infoHtml += infoBlank(); infoHtml += infoBlank(); infoHtml += infoBlank();
+
   if (ord.orderType === 'delivery') {
     var addrParts = ord.customer.address
       ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
-      : [''];
-    addrParts.forEach(function(part, i){
-      infoLines.push((i === 0 ? 'Addr : ' : '       ') + part);
-    });
-    infoLines.push(''); /* blank writing space under Addr */
-    infoLines.push('');
+      : [];
+    if (addrParts.length > 0) {
+      addrParts.forEach(function(part, i) {
+        infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part);
+      });
+    } else {
+      infoHtml += infoRow('Addr : ');
+    }
+    infoHtml += infoBlank(); infoHtml += infoBlank(); infoHtml += infoBlank();
   }
-  var infoHtml = infoLines.map(function(l){
-    return '<div style="white-space:pre-wrap;">' + l.replace(/ /g,'&nbsp;') + '</div>';
-  }).join('');
+
   html.push(
     '<div class="rflex" style="display:flex;justify-content:space-between;align-items:center;">' +
-    '<div style="flex:1;min-width:0;overflow:hidden;">' + infoHtml + '</div>' +
+    '<div style="flex:1;min-width:0;">' + infoHtml + '</div>' +
     '<div style="flex-shrink:0;width:' + bigLetterColW + ';text-align:right;font-size:' + bigLetterFontSize + ';font-weight:900;line-height:1;">' + bigLetter + '</div>' +
     '</div>'
   );
