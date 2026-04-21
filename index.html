@@ -253,9 +253,9 @@ function printReceipt(ord, paperSize) {
   infoHtml += infoRow('Date : ' + ord.date);
   infoHtml += infoRow('Time : ' + ord.time);
   infoHtml += infoRow('Name : ' + (ord.customer.name || ''));
-  infoHtml += infoBlank(); infoHtml += infoBlank(); infoHtml += infoBlank();
+  infoHtml += infoBlank(); infoHtml += infoBlank();
   infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
-  infoHtml += infoBlank(); infoHtml += infoBlank(); infoHtml += infoBlank();
+  infoHtml += infoBlank(); infoHtml += infoBlank();
 
   if (ord.orderType === 'delivery') {
     var addrParts = ord.customer.address
@@ -268,7 +268,7 @@ function printReceipt(ord, paperSize) {
     } else {
       infoHtml += infoRow('Addr : ');
     }
-    infoHtml += infoBlank(); infoHtml += infoBlank(); infoHtml += infoBlank();
+    infoHtml += infoBlank(); infoHtml += infoBlank();
   }
 
   html.push(
