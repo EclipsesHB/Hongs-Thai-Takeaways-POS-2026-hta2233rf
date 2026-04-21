@@ -289,9 +289,10 @@ function printReceipt(ord, paperSize) {
     blank();
   });
   div();
-  if (ord.deliveryCharge > 0) {
-    row(line('Food subtotal', '\u00a3' + ord.foodTotal.toFixed(2)));
-    row(line('Delivery', '\u00a3' + ord.deliveryCharge.toFixed(2)));
+  if (ord.deliveryCharge > 0 || ord.discountAmt > 0) {
+    row(line('Food subtotal', '\u00a3' + (parseFloat(ord.foodTotal)||0).toFixed(2)));
+    if (ord.deliveryCharge > 0) row(line('Delivery', '\u00a3' + ord.deliveryCharge.toFixed(2)));
+    if (ord.discountAmt > 0) row(line('Discount', '-\u00a3' + ord.discountAmt.toFixed(2)));
     div();
   }
   if (ord.paymentType) {
@@ -299,7 +300,11 @@ function printReceipt(ord, paperSize) {
     div();
   }
   /* Recalculate total fresh as safety net — never missing even if ord.total is wrong */
-  var safeTotal = (parseFloat(ord.foodTotal) || 0) + (parseFloat(ord.deliveryCharge) || 0);
+  var safeTotal = Math.max(0,
+    (parseFloat(ord.foodTotal) || 0) +
+    (parseFloat(ord.deliveryCharge) || 0) -
+    (parseFloat(ord.discountAmt) || 0)
+  );
   var totalAmt = '\u00a3' + safeTotal.toFixed(2);
   var totalFontSize = is58 ? '15px' : '17px';
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
@@ -534,6 +539,9 @@ function BasketScreen(props) {
   var setSelectedZone = props.setSelectedZone;
   var foodTotal = props.foodTotal;
   var deliveryCharge = props.deliveryCharge;
+  var discountAmt = props.discountAmt;
+  var discount = props.discount;
+  var setDiscount = props.setDiscount;
   var grandTotal = props.grandTotal;
   var onSubmit = props.onSubmit;
   var paymentType = props.paymentType;
@@ -666,9 +674,9 @@ function BasketScreen(props) {
     /* Customer */
     h('div', {style:{marginBottom:12}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'CUSTOMER'),
-      h('input', {style:Object.assign({},inp,{textTransform:'uppercase'}), type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value.toUpperCase()}); }); }}),
+      h('input', {style:Object.assign({},inp,{textTransform:'uppercase'}), type:'text', placeholder:'👤 Name', value:customer.name, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{name:e.target.value}); }); }}),
       h('input', {style:inp, type:'tel', inputMode:'numeric', placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
-      orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none',textTransform:'uppercase'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value.toUpperCase()}); }); }}),
+      orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none',textTransform:'uppercase'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value}); }); }}),
       h('textarea', {style:Object.assign({},inp,{marginBottom:8,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }}),
       /* Payment type */
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'PAYMENT'),
@@ -778,8 +786,48 @@ function BasketScreen(props) {
       )
     )
     ), /* end scrollable */
-    /* Pinned bottom: total + button */
+    /* Pinned bottom: discount + total + button */
     h('div', {style:{flexShrink:0,padding:'10px 12px 12px',borderTop:'1px solid ' + C.border,background:C.panel}},
+      /* Discount section */
+      discount.type !== null
+        ? h('div', {style:{background:C.card,borderRadius:10,padding:'8px 10px',marginBottom:8,border:'1px solid ' + C.accent}},
+            h('div', {style:{display:'flex',gap:6,alignItems:'center',marginBottom:6}},
+              h('span', {style:{fontSize:12,fontWeight:700,color:C.accent,flex:1}}, '% DISCOUNT'),
+              h('button', {className:'mbtn', onClick:function(){ setDiscount({type:null,pct:10,custom:''}); }, style:{fontSize:11,color:C.muted,background:'transparent',border:'none',cursor:'pointer',padding:'2px 6px'}}, '✕ Remove')
+            ),
+            h('div', {style:{display:'flex',gap:6,alignItems:'center'}},
+              h('button', {
+                className:'mbtn',
+                onClick:function(){ setDiscount(function(p){ return Object.assign({},p,{type: p.type==='pct' ? null : 'pct'}); }); },
+                style:{padding:'7px 12px',borderRadius:8,border:'1px solid ' + (discount.type==='pct' ? C.accent : C.border),background: discount.type==='pct' ? C.accentBg : 'transparent',color: discount.type==='pct' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}
+              }, '−' + discount.pct + '%'),
+              h('input', {
+                type:'number', inputMode:'decimal', min:'1', max:'99', placeholder:'%',
+                value: discount.pct,
+                onChange:function(e){ setDiscount(function(p){ return Object.assign({},p,{pct: Math.min(99,Math.max(1,parseInt(e.target.value)||10)), type:'pct'}); }); },
+                style:{width:52,background:C.bg,border:'1px solid ' + C.border,borderRadius:8,padding:'7px 8px',color:C.text,fontSize:13,outline:'none',textAlign:'center'}
+              }),
+              h('span', {style:{color:C.muted,fontSize:12,padding:'0 2px'}},'or'),
+              h('div', {style:{position:'relative',flex:1}},
+                h('span', {style:{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:C.muted,fontSize:13,pointerEvents:'none'}}, '£'),
+                h('input', {
+                  type:'number', inputMode:'decimal', min:'0', placeholder:'Custom £',
+                  value: discount.custom,
+                  onChange:function(e){ setDiscount(function(p){ return Object.assign({},p,{custom:e.target.value, type: e.target.value ? 'custom' : p.type}); }); },
+                  style:{width:'100%',background:C.bg,border:'1px solid ' + (discount.type==='custom' ? C.accent : C.border),borderRadius:8,padding:'7px 8px 7px 24px',color:C.accent,fontSize:13,outline:'none',fontWeight:700}
+                })
+              )
+            ),
+            discountAmt > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,color:C.muted,marginTop:6}},
+              h('span', null, discount.type==='pct' ? 'Discount (−'+discount.pct+'%)' : 'Discount'),
+              h('span', {style:{color:'#e07070'}}, '−\u00a3' + discountAmt.toFixed(2))
+            )
+          )
+        : h('button', {
+            className:'mbtn',
+            onClick:function(){ setDiscount(function(p){ return Object.assign({},p,{type:'pct'}); }); },
+            style:{width:'100%',padding:'8px',borderRadius:9,border:'1px dashed ' + C.border,background:'transparent',color:C.muted,fontWeight:600,fontSize:13,cursor:'pointer',marginBottom:8,display:'block'}
+          }, '% Add Discount'),
       h('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}},
         h('span', {style:{fontWeight:900,fontSize:22,letterSpacing:1}}, 'TOTAL'),
         h('span', {style:{fontWeight:900,fontSize:28,color:C.accent}}, '\u00a3' + grandTotal.toFixed(2))
@@ -1294,6 +1342,8 @@ function App() {
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
   var scheduleTypeState = useState('asap'); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(''); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
+  /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
+  var discountState = useState({type:null, pct:10, custom:''}); var discount = discountState[0]; var setDiscount = discountState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m4', JSON.stringify(menuItems)); }, [menuItems]);
@@ -1342,17 +1392,29 @@ function App() {
 
   var foodTotal = order.reduce(function(s,o){ return s + o.price * o.qty + (parseFloat(o.extra) || 0); }, 0);
   var delCharge = orderType === 'delivery' && selZone ? parseFloat(selZone) || 0 : 0;
-  var grand = foodTotal + delCharge;
+  var subtotal = foodTotal + delCharge;
+  var discountAmt = discount.type === 'pct'
+    ? Math.round(subtotal * (discount.pct / 100) * 100) / 100
+    : discount.type === 'custom'
+      ? Math.min(parseFloat(discount.custom) || 0, subtotal)
+      : 0;
+  var grand = Math.max(0, subtotal - discountAmt);
   var itemCount = order.reduce(function(s,o){ return s + o.qty; }, 0);
 
   function submit() {
     if (!order.length) return;
     var newOrd = {
       id: Date.now(),
-      customer: Object.assign({}, customer),
+      customer: {
+        name: (customer.name || '').toUpperCase(),
+        phone: customer.phone || '',
+        address: (customer.address || '').toUpperCase(),
+        notes: customer.notes || ''
+      },
       items: order.slice(),
       foodTotal: foodTotal,
       deliveryCharge: delCharge,
+      discountAmt: discountAmt,
       deliveryZone: selZone ? '\u00a3' + parseFloat(selZone).toFixed(2) : null,
       total: grand,
       orderType: orderType,
@@ -1369,6 +1431,7 @@ function App() {
     setPaymentType(null);
     setScheduleType('asap');
     setScheduleTime('');
+    setDiscount({type:null, pct:10, custom:''});
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
@@ -1412,7 +1475,7 @@ function App() {
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
