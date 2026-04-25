@@ -289,6 +289,10 @@ function printReceipt(ord, paperSize) {
     });
     if (cur) rowb(cur);
   }
+  if (ord.paymentType) {
+    div();
+    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
+  }
   div();
   /* Use a simpler flex-style layout for items so qty+amount are always on the same line */
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '12px' : '13px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
@@ -296,7 +300,7 @@ function printReceipt(ord, paperSize) {
   ord.items.forEach(function(item) {
     var extraAmt = parseFloat(item.extra) || 0;
     var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
-    var qtyStr = 'x' + item.qty;
+    var qtyStr = item.qty + 'x';
     /* Qty on left, then name, amount pinned to right */
     html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
       '<span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span>' +
@@ -320,10 +324,6 @@ function printReceipt(ord, paperSize) {
     if (ord.discountAmt > 0) row(line('Discount', '-\u00a3' + ord.discountAmt.toFixed(2)));
     div();
   }
-  if (ord.paymentType) {
-    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
-    div();
-  }
   /* Recalculate total fresh as safety net — never missing even if ord.total is wrong */
   var safeTotal = Math.max(0,
     (parseFloat(ord.foodTotal) || 0) +
@@ -340,6 +340,106 @@ function printReceipt(ord, paperSize) {
 
   /* Single copy — printer service handles copy count externally */
   document.getElementById('receipt-frame').innerHTML = html.join('');
+  window.print();
+}
+
+/* ── PRINT ALL RECEIPTS AS ONE JOB (Android BT compatible) ── */
+function printAllReceipts(orders, paperSize) {
+  if (!orders || !orders.length) return;
+  var is58 = paperSize === '58';
+  var W = is58 ? 26 : 36;
+  var mmSize = is58 ? '58mm' : '80mm';
+  var mmWidth = is58 ? '50mm' : '72mm';
+  var fontSize = is58 ? '15px' : '17px';
+  var lineH = is58 ? '1.7' : '1.8';
+  var padTop = is58 ? '3mm' : '4mm';
+  var totalFontSize = is58 ? '17px' : '19px';
+
+  var styleEl = document.getElementById('receipt-print-style');
+  if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 2mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}#receipt-frame .page-break{page-break-before:always;}}';
+
+  var HR = '<hr class="rhr"/>';
+  function line(left, right) { var gap = W - left.length - right.length; return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right; }
+  function buildOrderHtml(ord) {
+    var html = [];
+    function row(txt) { html.push('<div>' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+    function div() { html.push(HR); }
+    function blank() { html.push('<div>&nbsp;</div>'); }
+    function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
+    function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
+    function rowb(txt) { html.push('<div style="font-weight:bold;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+
+    crow("HONG'S THAI TAKEAWAY");
+    crow('01386 423341');
+    crow('9 Four Pools Shopping Centre');
+    crow('Davies Road, Evesham');
+    crow('WR11 1YP');
+    div();
+    crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
+    div();
+    if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
+      crowb('*** SCHEDULED ***'); crowb(ord.scheduleTime.toUpperCase()); div();
+    } else { crowb('*** ASAP ***'); div(); }
+
+    var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
+    var bigLetterFontSize = is58 ? '42px' : '54px';
+    var bigLetterColW = is58 ? '32px' : '42px';
+    function infoRow(txt) { return '<div style="overflow-wrap:break-word;word-break:normal;">' + txt + '</div>'; }
+    function infoBlank() { return '<div>&nbsp;</div>'; }
+    var infoHtml = '';
+    infoHtml += infoRow('Date : ' + ord.date);
+    infoHtml += infoRow('Time : ' + ord.time);
+    infoHtml += infoRow('Name : ' + (ord.customer.name || ''));
+    infoHtml += infoBlank(); infoHtml += infoBlank();
+    infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
+    infoHtml += infoBlank(); infoHtml += infoBlank();
+    if (ord.orderType === 'delivery') {
+      var addrParts = ord.customer.address ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean) : [];
+      if (addrParts.length > 0) { addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part); }); }
+      else { infoHtml += infoRow('Addr : '); }
+      infoHtml += infoBlank(); infoHtml += infoBlank();
+    }
+    html.push('<div class="rflex" style="display:flex;justify-content:space-between;align-items:center;"><div style="flex:1;min-width:0;">' + infoHtml + '</div><div style="flex-shrink:0;width:' + bigLetterColW + ';text-align:right;font-size:' + bigLetterFontSize + ';font-weight:900;line-height:1;">' + bigLetter + '</div></div>');
+    div();
+    if (ord.customer.notes) {
+      div(); row('NOTE:');
+      var words = ord.customer.notes.split(' '); var cur = '';
+      words.forEach(function(w) { if ((cur + ' ' + w).trim().length <= W) { cur = (cur + ' ' + w).trim(); } else { rowb(cur); cur = w; } });
+      if (cur) rowb(cur);
+    }
+    if (ord.paymentType) { div(); row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH')); }
+    div();
+    html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '12px' : '13px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
+    div();
+    ord.items.forEach(function(item) {
+      var extraAmt = parseFloat(item.extra) || 0;
+      var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
+      var qtyStr = item.qty + 'x';
+      html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;"><span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span><span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + item.name + '</span><span style="white-space:nowrap;padding-left:6px;">' + amtStr + '</span></div>');
+      if (extraAmt > 0) row('  + Extra: \u00a3' + extraAmt.toFixed(2));
+      if (item.comment && item.comment.trim()) { item.comment.trim().split('\n').forEach(function(l){ if(l.trim()) rowb('  > ' + l.trim()); }); }
+      blank();
+    });
+    div();
+    if (ord.deliveryCharge > 0 || ord.discountAmt > 0) {
+      row(line('Food subtotal', '\u00a3' + (parseFloat(ord.foodTotal)||0).toFixed(2)));
+      if (ord.deliveryCharge > 0) row(line('Delivery', '\u00a3' + ord.deliveryCharge.toFixed(2)));
+      if (ord.discountAmt > 0) row(line('Discount', '-\u00a3' + ord.discountAmt.toFixed(2)));
+      div();
+    }
+    var safeTotal = Math.max(0, (parseFloat(ord.foodTotal)||0) + (parseFloat(ord.deliveryCharge)||0) - (parseFloat(ord.discountAmt)||0));
+    html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;"><span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
+    div();
+    blank(); blank(); blank(); blank(); blank();
+    return html.join('');
+  }
+
+  var combined = orders.map(function(ord, i) {
+    return (i > 0 ? '<div class="page-break"></div>' : '') + buildOrderHtml(ord);
+  }).join('');
+
+  document.getElementById('receipt-frame').innerHTML = combined;
   window.print();
 }
 
@@ -1297,6 +1397,7 @@ function QueueView(props) {
   var setOrders = props.setOrders;
   var onPrint = props.onPrint;
   var onPrintAll = props.onPrintAll;
+  var onClearQueue = props.onClearQueue;
   var menuItems = props.menuItems;
   var setTab = props.setTab;
 
@@ -1360,6 +1461,11 @@ function QueueView(props) {
           onClick: onPrintAll,
           style:{padding:'8px 14px',borderRadius:9,border:'none',background:C.accent,color:C.bg,cursor:'pointer',fontSize:13,fontWeight:800}
         }, '🖨️ Print All (' + queue.length + ')'),
+        queue.length > 0 && h('button', {
+          className:'mbtn',
+          onClick: onClearQueue,
+          style:{padding:'8px 14px',borderRadius:9,border:'1px solid ' + C.danger + '80',background:'transparent',color:C.danger,cursor:'pointer',fontSize:13,fontWeight:700}
+        }, '🗑️ Clear All'),
         h('button', {
           className:'mbtn',
           onClick: function(){ setTab && setTab('order'); },
@@ -2076,7 +2182,23 @@ function App() {
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
-  var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,onPrint:function(ord){ printReceipt(ord, paperSize); setOrders(function(prev){ return [ord].concat(prev); }); setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); }); },onPrintAll:function(){ if(!queue.length) return; queue.forEach(function(ord,i){ setTimeout(function(){ printReceipt(ord, paperSize); }, i*300); }); setOrders(function(prev){ return queue.slice().reverse().concat(prev); }); setQueue([]); },menuItems:menuItems,setTab:setTab};
+  var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
+    onPrint:function(ord){
+      printReceipt(ord, paperSize);
+      setOrders(function(prev){ return [ord].concat(prev); });
+      setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
+    },
+    onPrintAll:function(){
+      if(!queue.length) return;
+      printAllReceipts(queue, paperSize);
+      setOrders(function(prev){ return queue.slice().reverse().concat(prev); });
+      setQueue([]);
+    },
+    onClearQueue:function(){
+      if(window.confirm('Clear all ' + queue.length + ' orders from the queue? This cannot be undone.'))
+        setQueue([]);
+    },
+    menuItems:menuItems,setTab:setTab};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu,reorderMenuItem:reorderMenuItem};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
   function reorderOrder(fromIdx, toIdx) {
