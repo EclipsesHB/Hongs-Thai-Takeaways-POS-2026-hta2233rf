@@ -291,7 +291,7 @@ function printReceipt(ord, paperSize) {
   }
   if (ord.paymentType) {
     div();
-    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
+    html.push('<div class="rflex" style="display:flex;justify-content:space-between;"><span>Payment</span><span>' + (ord.paymentType === 'card' ? 'CARD' : 'CASH') + '</span></div>');
   }
   div();
   /* Use a simpler flex-style layout for items so qty+amount are always on the same line */
@@ -944,25 +944,23 @@ function BasketScreen(props) {
           selectedZone && h('div', {style:{fontSize:14,color:C.accent,fontWeight:700}}, '\u00a3' + parseFloat(selectedZone).toFixed(2))
         )
       ),
-      /* Payment type — inline on one row */
-      h('div', {style:{display:'flex',alignItems:'center',gap:8,marginBottom:0}},
-        h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,whiteSpace:'nowrap'}}, 'PAYMENT'),
-        h('div', {style:{display:'flex',gap:6,flex:1}},
-          ['cash','card'].map(function(t) {
-            var active = paymentType === t;
-            return h('button', {
-              key:t, className:'mbtn',
-              onClick: function(){ setPaymentType(active ? null : t); },
-              style:{
-                flex:1, padding:'8px 6px', borderRadius:10,
-                border:'1px solid ' + (active ? C.accent : C.border),
-                background: active ? C.accentBg : 'transparent',
-                color: active ? C.accent : C.muted,
-                fontWeight:700, fontSize:13, cursor:'pointer'
-              }
-            }, t === 'cash' ? '💵 Cash' : '💳 Card');
-          })
-        )
+      /* Payment type */
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'PAYMENT'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['cash','card'].map(function(t) {
+          var active = paymentType === t;
+          return h('button', {
+            key:t, className:'mbtn',
+            onClick: function(){ setPaymentType(active ? null : t); },
+            style:{
+              flex:1, padding:'11px 8px', borderRadius:10,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:14, cursor:'pointer'
+            }
+          }, t === 'cash' ? '💵 Cash' : '💳 Card');
+        })
       )
     ),
     /* Items */
@@ -1303,31 +1301,44 @@ function ZoneEditor(props) {
 
 /* ── PRINT QUEUE MODAL (sequential, Android BT safe) ── */
 function PrintQueueModal(props) {
-  var jobs = props.jobs; // [{ord, paperSize}]
+  var jobs = props.jobs;
   var idx = props.idx;
   var total = jobs.length;
   var onPrintThis = props.onPrintThis;
-  var onSkip = props.onSkip;
+  var onNext = props.onNext;
   var onClose = props.onClose;
+  var printedState = useState(false); var printed = printedState[0]; var setPrinted = printedState[1];
+
+  useEffect(function(){ setPrinted(false); }, [idx]);
+
   if (!jobs.length) return null;
-  var job = jobs[idx];
-  var ord = job.ord;
-  return h('div', {style:{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.75)'}},
-    h('div', {style:{background:C.panel,borderRadius:16,padding:24,maxWidth:340,width:'90%',border:'2px solid ' + C.accent,boxShadow:'0 8px 40px rgba(0,0,0,0.6)'}},
-      h('div', {style:{fontWeight:900,fontSize:16,color:C.accent,marginBottom:6}}, '🖨️ Print All — ' + (idx+1) + ' of ' + total),
-      h('div', {style:{fontSize:13,color:C.text,marginBottom:4,fontWeight:700}}, ord.customer.name || 'Walk-in'),
-      h('div', {style:{fontSize:12,color:C.muted,marginBottom:4}}, ord.orderType === 'delivery' ? '🚗 Delivery' : '🏃 Collection'),
-      ord.items.length > 0 && h('div', {style:{fontSize:12,color:C.dim,marginBottom:14}}, ord.items.map(function(i){ return i.qty+'x '+i.name; }).join(', ')),
-      h('div', {style:{fontSize:11,color:C.muted,marginBottom:16,background:C.bg,borderRadius:8,padding:'8px 10px'}},
-        'Tap Print Receipt to open the print dialog for this order. When done, tap Next to print the following order.'
+  var ord = jobs[idx].ord;
+  var isLast = idx >= total - 1;
+
+  return h('div', {style:{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.82)'}},
+    h('div', {style:{background:C.panel,borderRadius:16,padding:24,maxWidth:320,width:'90%',border:'2px solid ' + C.accent,boxShadow:'0 8px 40px rgba(0,0,0,0.6)'}},
+      h('div', {style:{fontWeight:900,fontSize:15,color:C.accent,marginBottom:8}}, '🖨️ ' + (idx+1) + ' / ' + total),
+      h('div', {style:{fontWeight:700,fontSize:14,marginBottom:2}}, ord.customer.name || 'Walk-in'),
+      h('div', {style:{fontSize:12,color:C.muted,marginBottom:10}},
+        (ord.orderType === 'delivery' ? '🚗 Delivery' : '🏃 Collection') +
+        (ord.paymentType ? '  ·  ' + (ord.paymentType === 'cash' ? '💵 Cash' : '💳 Card') : '')
       ),
-      h('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
-        h('button', {className:'mbtn', onClick:onPrintThis, style:{flex:2,padding:'12px 8px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}},
-          '🖨️ Print Receipt'
-        ),
-        idx < total - 1 && h('button', {className:'mbtn', onClick:onSkip, style:{flex:1,padding:'12px 8px',borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, 'Skip'),
-        h('button', {className:'mbtn', onClick:onClose, style:{flex:1,padding:'12px 8px',borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, idx >= total-1 ? 'Done' : 'Stop')
-      )
+      h('div', {style:{fontSize:12,color:C.dim,marginBottom:16,lineHeight:1.5}},
+        ord.items.map(function(i){ return i.qty + 'x ' + i.name; }).join(', ')
+      ),
+      !printed
+        ? h('button', {className:'mbtn', onClick:function(){ onPrintThis(); setPrinted(true); }, style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:15,cursor:'pointer'}},
+            '🖨️ Print Receipt'
+          )
+        : h('div', null,
+            h('div', {style:{textAlign:'center',color:'#70e890',fontWeight:700,fontSize:13,marginBottom:12}}, '✅ Printed — confirm receipt is out'),
+            h('div', {style:{display:'flex',gap:8}},
+              isLast
+                ? h('button', {className:'mbtn', onClick:onClose, style:{flex:1,padding:'12px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, '✅ Done')
+                : h('button', {className:'mbtn', onClick:onNext, style:{flex:1,padding:'12px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, 'Next → ' + (idx+2) + ' / ' + total),
+              h('button', {className:'mbtn', onClick:onClose, style:{padding:'12px 14px',borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, 'Stop')
+            )
+          )
     )
   );
 }
@@ -2197,18 +2208,15 @@ function App() {
       ),
       printModal && h(PrintQueueModal, {
         jobs: printModal.jobs, idx: printModal.idx,
-        onPrintThis: function(){
-          printReceipt(printModal.jobs[printModal.idx].ord, paperSize);
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
+        onNext: function(){
           var nextIdx = printModal.idx + 1;
           if (nextIdx >= printModal.jobs.length) {
-            var done = printModal.onDone;
-            setPrintModal(null);
-            if (done) done();
+            var done = printModal.onDone; setPrintModal(null); if (done) done();
           } else {
             setPrintModal(function(m){ return Object.assign({},m,{idx:nextIdx}); });
           }
         },
-        onSkip: function(){ setPrintModal(function(m){ return Object.assign({},m,{idx:m.idx+1}); }); },
         onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
       })
     );
@@ -2243,18 +2251,15 @@ function App() {
     ),
     printModal && h(PrintQueueModal, {
       jobs: printModal.jobs, idx: printModal.idx,
-      onPrintThis: function(){
-        printReceipt(printModal.jobs[printModal.idx].ord, paperSize);
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
+      onNext: function(){
         var nextIdx = printModal.idx + 1;
         if (nextIdx >= printModal.jobs.length) {
-          var done = printModal.onDone;
-          setPrintModal(null);
-          if (done) done();
+          var done = printModal.onDone; setPrintModal(null); if (done) done();
         } else {
           setPrintModal(function(m){ return Object.assign({},m,{idx:nextIdx}); });
         }
       },
-      onSkip: function(){ setPrintModal(function(m){ return Object.assign({},m,{idx:m.idx+1}); }); },
       onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
     })
   );
