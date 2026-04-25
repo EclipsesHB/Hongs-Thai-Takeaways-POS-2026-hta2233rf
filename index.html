@@ -558,9 +558,9 @@ function DraggableOrderList(props) {
   var updateItemName = props.updateItemName;
   var reorderOrder = props.reorderOrder;
 
-  /* drag state stored in refs — no re-renders during drag, only on drop */
-  var dragState = useRef(null); /* {fromIdx, ghostEl, itemEl, offsetY, itemHeight} */
+  var dragState = useRef(null);
   var itemRefs = useRef([]);
+  var handleRefs = useRef([]);
   var dragOverIdx = useRef(-1);
 
   function getItemIdx(el) {
@@ -570,97 +570,86 @@ function DraggableOrderList(props) {
     return -1;
   }
 
-  function onHandleTouchStart(idx, e) {
-    if (e.touches.length !== 1) return;
-    var touch = e.touches[0];
-    var el = itemRefs.current[idx];
-    if (!el) return;
-    var rect = el.getBoundingClientRect();
-
-    /* Create a ghost clone that floats under the finger */
-    var ghost = el.cloneNode(true);
-    ghost.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;' +
-      'opacity:0.85;pointerEvents:none;zIndex:9999;borderRadius:10px;' +
-      'boxShadow:0 8px 24px rgba(0,0,0,0.5);transition:none;';
-    document.body.appendChild(ghost);
-
-    /* Dim the original */
-    el.style.opacity = '0.3';
-
-    dragState.current = {
-      fromIdx: idx,
-      ghostEl: ghost,
-      offsetY: touch.clientY - rect.top,
-      itemHeight: rect.height
-    };
-    dragOverIdx.current = idx;
-    e.preventDefault();
-  }
-
-  function onTouchMove(e) {
-    if (!dragState.current || e.touches.length !== 1) return;
-    e.preventDefault();
-    var touch = e.touches[0];
-    var ds = dragState.current;
-
-    /* Move ghost */
-    ds.ghostEl.style.top = (touch.clientY - ds.offsetY) + 'px';
-
-    /* Find which item slot finger is over */
-    ds.ghostEl.style.display = 'none';
-    var elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-    ds.ghostEl.style.display = '';
-    var overIdx = elBelow ? getItemIdx(elBelow) : -1;
-
-    if (overIdx !== -1 && overIdx !== dragOverIdx.current) {
-      /* Shift placeholder highlight */
-      for (var i = 0; i < itemRefs.current.length; i++) {
-        var ref = itemRefs.current[i];
-        if (!ref) continue;
-        if (i === ds.fromIdx) { ref.style.opacity = '0.3'; continue; }
-        ref.style.borderTop = (i === overIdx && overIdx < ds.fromIdx) ? '3px solid #5bb8f5' : '';
-        ref.style.borderBottom = (i === overIdx && overIdx >= ds.fromIdx) ? '3px solid #5bb8f5' : '';
-      }
-      dragOverIdx.current = overIdx;
-    }
-  }
-
-  function onTouchEnd(e) {
-    if (!dragState.current) return;
-    var ds = dragState.current;
-    document.body.removeChild(ds.ghostEl);
-
-    /* Restore styles */
-    for (var i = 0; i < itemRefs.current.length; i++) {
-      var ref = itemRefs.current[i];
-      if (ref) { ref.style.opacity = ''; ref.style.borderTop = ''; ref.style.borderBottom = ''; }
-    }
-
-    var toIdx = dragOverIdx.current;
-    if (toIdx !== -1 && toIdx !== ds.fromIdx) {
-      reorderOrder(ds.fromIdx, toIdx);
-    }
-
-    dragState.current = null;
-    dragOverIdx.current = -1;
-  }
-
-  /* Attach global touchmove/touchend to window so drag works if finger leaves the list */
+  /* Native (non-passive) touchstart on each handle — attached via useEffect */
   useEffect(function() {
-    function move(e) { onTouchMove(e); }
-    function end(e) { onTouchEnd(e); }
-    window.addEventListener('touchmove', move, {passive:false});
-    window.addEventListener('touchend', end);
-    window.addEventListener('touchcancel', end);
-    return function() {
-      window.removeEventListener('touchmove', move);
-      window.removeEventListener('touchend', end);
-      window.removeEventListener('touchcancel', end);
-    };
-  }, [order]); /* re-bind when order changes so getItemIdx closure is fresh */
+    var cleanups = [];
 
-  /* Trim stale refs when order shrinks */
+    function makeHandler(idx) {
+      return function onTouchStart(e) {
+        if (e.touches.length !== 1) return;
+        e.preventDefault(); /* stops scroll — only works because listener is non-passive */
+        var touch = e.touches[0];
+        var el = itemRefs.current[idx];
+        if (!el) return;
+        var rect = el.getBoundingClientRect();
+        var ghost = el.cloneNode(true);
+        ghost.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;opacity:0.88;pointer-events:none;z-index:9999;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,0.55);';
+        document.body.appendChild(ghost);
+        el.style.opacity = '0.25';
+        dragState.current = { fromIdx: idx, ghostEl: ghost, offsetY: touch.clientY - rect.top };
+        dragOverIdx.current = idx;
+      };
+    }
+
+    for (var i = 0; i < handleRefs.current.length; i++) {
+      var el = handleRefs.current[i];
+      if (!el) continue;
+      var handler = makeHandler(i);
+      el.addEventListener('touchstart', handler, {passive: false});
+      cleanups.push({el: el, handler: handler});
+    }
+
+    function onMove(e) {
+      if (!dragState.current || e.touches.length !== 1) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      var ds = dragState.current;
+      ds.ghostEl.style.top = (touch.clientY - ds.offsetY) + 'px';
+      ds.ghostEl.style.display = 'none';
+      var elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+      ds.ghostEl.style.display = '';
+      var overIdx = elBelow ? getItemIdx(elBelow) : -1;
+      if (overIdx !== -1 && overIdx !== dragOverIdx.current) {
+        for (var j = 0; j < itemRefs.current.length; j++) {
+          var ref = itemRefs.current[j];
+          if (!ref) continue;
+          ref.style.opacity = j === ds.fromIdx ? '0.25' : '';
+          ref.style.boxShadow = j === overIdx ? 'inset 0 ' + (overIdx <= ds.fromIdx ? '3px' : '-3px') + ' 0 #5bb8f5' : '';
+        }
+        dragOverIdx.current = overIdx;
+      }
+    }
+
+    function onEnd() {
+      if (!dragState.current) return;
+      var ds = dragState.current;
+      if (ds.ghostEl.parentNode) document.body.removeChild(ds.ghostEl);
+      for (var j = 0; j < itemRefs.current.length; j++) {
+        var ref = itemRefs.current[j];
+        if (ref) { ref.style.opacity = ''; ref.style.boxShadow = ''; }
+      }
+      var toIdx = dragOverIdx.current;
+      dragState.current = null;
+      dragOverIdx.current = -1;
+      if (toIdx !== -1 && toIdx !== ds.fromIdx) reorderOrder(ds.fromIdx, toIdx);
+    }
+
+    window.addEventListener('touchmove', onMove, {passive: false});
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+
+    return function() {
+      for (var k = 0; k < cleanups.length; k++) {
+        cleanups[k].el.removeEventListener('touchstart', cleanups[k].handler);
+      }
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+    };
+  }, [order]);
+
   itemRefs.current = itemRefs.current.slice(0, order.length);
+  handleRefs.current = handleRefs.current.slice(0, order.length);
 
   return h(React.Fragment, null,
     order.map(function(item, idx) {
@@ -668,17 +657,16 @@ function DraggableOrderList(props) {
       return h('div', {
         key: item.id + '_' + idx,
         ref: function(el){ itemRefs.current[idx] = el; },
-        style:{marginBottom:7,background:C.card,borderRadius:10,border:'1px solid ' + (isCustom ? C.accent : C.border),overflow:'hidden',transition:'border 0.1s'}
+        style:{marginBottom:7,background:C.card,borderRadius:10,border:'1px solid ' + (isCustom ? C.accent : C.border),overflow:'hidden',transition:'box-shadow 0.1s'}
       },
         h('div', {style:{display:'flex',alignItems:'center',gap:8,padding:'10px 12px'}},
-          /* Drag handle */
           h('div', {
-            onTouchStart: function(e){ onHandleTouchStart(idx, e); },
-            style:{flexShrink:0,width:22,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,padding:'4px 2px',cursor:'grab',touchAction:'none',opacity:0.45}
+            ref: function(el){ handleRefs.current[idx] = el; },
+            style:{flexShrink:0,width:24,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,padding:'6px 2px',cursor:'grab',touchAction:'none',opacity:0.5}
           },
-            h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}}),
-            h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}}),
-            h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}})
+            h('div', {style:{width:16,height:2,background:C.dim,borderRadius:1}}),
+            h('div', {style:{width:16,height:2,background:C.dim,borderRadius:1}}),
+            h('div', {style:{width:16,height:2,background:C.dim,borderRadius:1}})
           ),
           h('div', {style:{flex:1,minWidth:0}},
             isCustom
@@ -806,6 +794,8 @@ function BasketScreen(props) {
   var discountAmt = props.discountAmt;
   var discount = props.discount;
   var setDiscount = props.setDiscount;
+  var priceOverride = props.priceOverride;
+  var setPriceOverride = props.setPriceOverride;
   var grandTotal = props.grandTotal;
   var onSubmit = props.onSubmit;
   var paymentType = props.paymentType;
@@ -986,14 +976,14 @@ function BasketScreen(props) {
     ), /* end scrollable */
     /* Pinned bottom: discount + total + button */
     h('div', {style:{flexShrink:0,padding:'10px 12px 12px',borderTop:'1px solid ' + C.border,background:C.panel}},
-      /* Discount section */
-      discount.type !== null
-        ? h('div', {style:{background:C.card,borderRadius:10,padding:'8px 10px',marginBottom:8,border:'1px solid ' + C.accent}},
+      /* Discount / override section */
+      discount.type !== null || priceOverride !== ''
+        ? h('div', {style:{background:C.card,borderRadius:10,padding:'8px 10px',marginBottom:8,border:'1px solid ' + (priceOverride !== '' ? '#e07030' : C.accent)}},
             h('div', {style:{display:'flex',gap:6,alignItems:'center',marginBottom:6}},
-              h('span', {style:{fontSize:12,fontWeight:700,color:C.accent,flex:1}}, '% DISCOUNT'),
-              h('button', {className:'mbtn', onClick:function(){ setDiscount({type:null,pct:10,custom:''}); }, style:{fontSize:11,color:C.muted,background:'transparent',border:'none',cursor:'pointer',padding:'2px 6px'}}, '✕ Remove')
+              h('span', {style:{fontSize:12,fontWeight:700,color: priceOverride !== '' ? '#e07030' : C.accent,flex:1}}, priceOverride !== '' ? '⚡ OVERRIDE + DISCOUNT' : '% DISCOUNT'),
+              h('button', {className:'mbtn', onClick:function(){ setDiscount({type:null,pct:10,custom:''}); setPriceOverride(''); }, style:{fontSize:11,color:C.muted,background:'transparent',border:'none',cursor:'pointer',padding:'2px 6px'}}, '✕ Remove')
             ),
-            h('div', {style:{display:'flex',gap:6,alignItems:'center'}},
+            h('div', {style:{display:'flex',gap:6,alignItems:'center',marginBottom:6}},
               h('button', {
                 className:'mbtn',
                 onClick:function(){ setDiscount(function(p){ return Object.assign({},p,{type: p.type==='pct' ? null : 'pct'}); }); },
@@ -1011,19 +1001,43 @@ function BasketScreen(props) {
                 })
               )
             ),
-            discountAmt > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,color:C.muted,marginTop:6}},
-              h('span', null, discount.type==='pct' ? 'Discount (−'+discount.pct+'%)' : 'Discount'),
-              h('span', {style:{color:'#e07070'}}, '−\u00a3' + discountAmt.toFixed(2))
+            h('div', {style:{display:'flex',alignItems:'center',gap:6}},
+              h('span', {style:{fontSize:12,color:'#e07030',fontWeight:700,flexShrink:0}}, '⚡ Override:'),
+              h('div', {style:{position:'relative',flex:1}},
+                h('span', {style:{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:'#e07030',fontSize:13,fontWeight:700,pointerEvents:'none'}}, '£'),
+                h('input', {
+                  type:'number', inputMode:'decimal', min:'0', placeholder:'Set exact total',
+                  value: priceOverride,
+                  onFocus: function(e){ e.target.select(); },
+                  onChange: function(e){ setPriceOverride(e.target.value); },
+                  style:{width:'100%',background:C.bg,border:'1px solid ' + (priceOverride !== '' ? '#e07030' : C.border),borderRadius:8,padding:'7px 8px 7px 24px',color:'#e07030',fontSize:13,outline:'none',fontWeight:700,boxSizing:'border-box'}
+                })
+              )
+            ),
+            (discountAmt > 0 || (priceOverride !== '' && !isNaN(parseFloat(priceOverride)))) && h('div', {style:{marginTop:6}},
+              discountAmt > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,color:C.muted}},
+                h('span', null, discount.type==='pct' ? 'Discount (−'+discount.pct+'%)' : 'Discount'),
+                h('span', {style:{color:'#e07070'}}, '−\u00a3' + discountAmt.toFixed(2))
+              ),
+              priceOverride !== '' && !isNaN(parseFloat(priceOverride)) && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,color:C.muted,marginTop:2}},
+                h('span', null, 'Overrides calculated total'),
+                h('span', {style:{color:'#e07030',fontWeight:700}}, '\u00a3' + parseFloat(priceOverride).toFixed(2))
+              )
             )
           )
         : h('button', {
             className:'mbtn',
             onClick:function(){ setDiscount(function(p){ return Object.assign({},p,{type:'pct'}); }); },
             style:{width:'100%',padding:'8px',borderRadius:9,border:'1px dashed ' + C.border,background:'transparent',color:C.muted,fontWeight:600,fontSize:13,cursor:'pointer',marginBottom:8,display:'block'}
-          }, '% Add Discount'),
+          }, '% Discount / Override Price'),
       h('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:10,alignItems:'center'}},
         h('span', {style:{fontWeight:900,fontSize:22,letterSpacing:1}}, 'TOTAL'),
-        h('span', {style:{fontWeight:900,fontSize:28,color:C.accent}}, '\u00a3' + grandTotal.toFixed(2))
+        priceOverride !== '' && !isNaN(parseFloat(priceOverride))
+          ? h('div', {style:{textAlign:'right'}},
+              h('div', {style:{fontSize:12,color:C.muted,textDecoration:'line-through'}}, '\u00a3' + Math.max(0, foodTotal + deliveryCharge - discountAmt).toFixed(2)),
+              h('span', {style:{fontWeight:900,fontSize:28,color:'#e07030'}}, '\u00a3' + parseFloat(priceOverride).toFixed(2))
+            )
+          : h('span', {style:{fontWeight:900,fontSize:28,color:C.accent}}, '\u00a3' + grandTotal.toFixed(2))
       ),
       h('button', {
         className:'mbtn', onClick:onSubmit, disabled:!order.length,
@@ -1052,6 +1066,100 @@ function MenuEditor(props) {
   var saveItem = props.saveItem;
   var smInp = props.smInp;
   var resetMenu = props.resetMenu;
+  var reorderMenuItem = props.reorderMenuItem;
+
+  var dragState = useRef(null);
+  var itemEls = useRef({});   /* keyed by item.id */
+  var handleEls = useRef({}); /* keyed by item.id */
+  var dragOverId = useRef(null);
+
+  function getIdFromEl(el) {
+    var keys = Object.keys(itemEls.current);
+    for (var k = 0; k < keys.length; k++) {
+      var ref = itemEls.current[keys[k]];
+      if (ref && (ref === el || ref.contains(el))) return keys[k];
+    }
+    return null;
+  }
+
+  /* Attach native non-passive touchstart on all handles */
+  useEffect(function() {
+    var cleanups = [];
+
+    function makeHandler(itemId) {
+      return function(e) {
+        if (e.touches.length !== 1) return;
+        e.preventDefault();
+        var touch = e.touches[0];
+        var el = itemEls.current[itemId];
+        if (!el) return;
+        var rect = el.getBoundingClientRect();
+        var ghost = el.cloneNode(true);
+        ghost.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;opacity:0.88;pointer-events:none;z-index:9999;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,0.55);';
+        document.body.appendChild(ghost);
+        el.style.opacity = '0.25';
+        dragState.current = { fromId: itemId, ghostEl: ghost, offsetY: touch.clientY - rect.top };
+        dragOverId.current = itemId;
+      };
+    }
+
+    var ids = Object.keys(handleEls.current);
+    for (var i = 0; i < ids.length; i++) {
+      var el = handleEls.current[ids[i]];
+      if (!el) continue;
+      var h2 = makeHandler(ids[i]);
+      el.addEventListener('touchstart', h2, {passive: false});
+      cleanups.push({el: el, fn: h2});
+    }
+
+    function onMove(e) {
+      if (!dragState.current || e.touches.length !== 1) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      var ds = dragState.current;
+      ds.ghostEl.style.top = (touch.clientY - ds.offsetY) + 'px';
+      ds.ghostEl.style.display = 'none';
+      var elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+      ds.ghostEl.style.display = '';
+      var overId = elBelow ? getIdFromEl(elBelow) : null;
+      if (overId && overId !== dragOverId.current) {
+        var allIds = Object.keys(itemEls.current);
+        for (var j = 0; j < allIds.length; j++) {
+          var ref = itemEls.current[allIds[j]];
+          if (!ref) continue;
+          ref.style.opacity = allIds[j] === ds.fromId ? '0.25' : '';
+          ref.style.boxShadow = allIds[j] === overId ? '0 -3px 0 #5bb8f5 inset' : '';
+        }
+        dragOverId.current = overId;
+      }
+    }
+
+    function onEnd() {
+      if (!dragState.current) return;
+      var ds = dragState.current;
+      if (ds.ghostEl.parentNode) document.body.removeChild(ds.ghostEl);
+      var allIds = Object.keys(itemEls.current);
+      for (var j = 0; j < allIds.length; j++) {
+        var ref = itemEls.current[allIds[j]];
+        if (ref) { ref.style.opacity = ''; ref.style.boxShadow = ''; }
+      }
+      var toId = dragOverId.current;
+      dragState.current = null;
+      dragOverId.current = null;
+      if (toId && toId !== ds.fromId) reorderMenuItem(parseInt(ds.fromId), parseInt(toId));
+    }
+
+    window.addEventListener('touchmove', onMove, {passive: false});
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+
+    return function() {
+      for (var k = 0; k < cleanups.length; k++) cleanups[k].el.removeEventListener('touchstart', cleanups[k].fn);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+    };
+  }, [menuItems]);
 
   return h('div', null,
     h('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
@@ -1071,6 +1179,7 @@ function MenuEditor(props) {
         h('button', {className:'mbtn', onClick:addItem, style:{padding:'10px 16px',borderRadius:8,border:'none',background:C.accent,color:C.bg,fontWeight:700,cursor:'pointer',fontSize:13}}, '+ Add')
       )
     ),
+    h('div', {style:{fontSize:11,color:C.muted,marginBottom:10,textAlign:'center'}}, '☰ Hold the grip handle to drag items into a new position'),
     CATS.map(function(cat) {
       var items = menuItems.filter(function(i){ return i.cat === cat; });
       if (!items.length) return null;
@@ -1079,7 +1188,21 @@ function MenuEditor(props) {
           ICONS[cat] + ' ' + cat.toUpperCase() + ' (' + items.length + ')'
         ),
         items.map(function(item) {
-          return h('div', {key:item.id, style:{background:C.card,borderRadius:8,padding:'8px 10px',marginBottom:4,border:'1px solid ' + C.border,display:'flex',alignItems:'center',gap:7,flexWrap:'wrap'}},
+          var idStr = String(item.id);
+          return h('div', {
+            key: item.id,
+            ref: function(el){ if (el) itemEls.current[idStr] = el; else delete itemEls.current[idStr]; },
+            style:{background:C.card,borderRadius:8,padding:'8px 10px',marginBottom:4,border:'1px solid ' + C.border,display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',transition:'box-shadow 0.1s'}
+          },
+            /* Drag handle */
+            h('div', {
+              ref: function(el){ if (el) handleEls.current[idStr] = el; else delete handleEls.current[idStr]; },
+              style:{flexShrink:0,width:20,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,padding:'6px 2px',cursor:'grab',touchAction:'none',opacity:0.45}
+            },
+              h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}}),
+              h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}}),
+              h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}})
+            ),
             editItem && editItem.id === item.id ? h(React.Fragment, null,
               h('input', {value:editItem.num||'', placeholder:'#No', onChange:function(e){ setEditItem(function(p){ return Object.assign({},p,{num:e.target.value}); }); }, style:{flex:'0 0 55px',background:C.bg,border:'1px solid ' + C.accent,borderRadius:6,padding:'6px 9px',color:C.text,fontSize:13,outline:'none'}}),
               h('input', {value:editItem.name, onChange:function(e){ setEditItem(function(p){ return Object.assign({},p,{name:e.target.value}); }); }, style:{flex:'2 1 120px',background:C.bg,border:'1px solid ' + C.accent,borderRadius:6,padding:'6px 9px',color:C.text,fontSize:13,outline:'none'}}),
@@ -1539,6 +1662,8 @@ function App() {
   var scheduleTimeState = useState(''); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
   var discountState = useState({type:null, pct:10, custom:''}); var discount = discountState[0]; var setDiscount = discountState[1];
+  /* priceOverride: null or string — manually typed total that replaces computed grand */
+  var priceOverrideState = useState(''); var priceOverride = priceOverrideState[0]; var setPriceOverride = priceOverrideState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m5', JSON.stringify(menuItems)); }, [menuItems]);
@@ -1593,7 +1718,9 @@ function App() {
     : discount.type === 'custom'
       ? Math.min(parseFloat(discount.custom) || 0, subtotal)
       : 0;
-  var grand = Math.max(0, subtotal - discountAmt);
+  var grand = priceOverride !== '' && !isNaN(parseFloat(priceOverride))
+    ? Math.max(0, parseFloat(priceOverride))
+    : Math.max(0, subtotal - discountAmt);
   var itemCount = order.reduce(function(s,o){ return s + o.qty; }, 0);
 
   function submit() {
@@ -1627,6 +1754,7 @@ function App() {
     setScheduleType('asap');
     setScheduleTime('');
     setDiscount({type:null, pct:10, custom:''});
+    setPriceOverride('');
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
@@ -1643,6 +1771,18 @@ function App() {
   function delItem(id) { if (window.confirm('Delete item?')) setMenuItems(function(p){ return p.filter(function(i){ return i.id!==id; }); }); }
   function saveItem() { setMenuItems(function(p){ return p.map(function(i){ return i.id===editItem.id ? Object.assign({},editItem,{price:parseFloat(editItem.price)}) : i; }); }); setEditItem(null); }
   function resetMenu() { if (window.confirm('Reset menu to default? This will remove any custom items you have added.')) { setMenuItems(MENU); setEditItem(null); } }
+  function reorderMenuItem(fromId, toId) {
+    if (fromId === toId) return;
+    setMenuItems(function(prev) {
+      var arr = prev.slice();
+      var fromIdx = arr.findIndex(function(i){ return i.id === fromId; });
+      var toIdx = arr.findIndex(function(i){ return i.id === toId; });
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      var item = arr.splice(fromIdx, 1)[0];
+      arr.splice(toIdx, 0, item);
+      return arr;
+    });
+  }
   function addZone() { if (!newZone.area.trim() || !newZone.price) return; setZones(function(p){ return p.concat([Object.assign({},newZone,{id:Date.now(),price:parseFloat(newZone.price)})]); }); setNewZone({area:'',price:''}); }
   function delZone(id) { if (window.confirm('Remove zone?')) setZones(function(p){ return p.filter(function(z){ return z.id!==id; }); }); }
   function saveZone() { setZones(function(p){ return p.map(function(z){ return z.id===editZone.id ? Object.assign({},editZone,{price:parseFloat(editZone.price)}) : z; }); }); setEditZone(null); }
@@ -1667,7 +1807,7 @@ function App() {
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
-  var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu};
+  var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu,reorderMenuItem:reorderMenuItem};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
   function reorderOrder(fromIdx, toIdx) {
     if (fromIdx === toIdx) return;
@@ -1681,7 +1821,7 @@ function App() {
 
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
