@@ -1933,11 +1933,11 @@ function App() {
   });
   var queue = queueState[0]; var setQueue = queueState[1];
 
-  var orderState = useState([]); var order = orderState[0]; var setOrder = orderState[1];
-  var customerState = useState({name:'',phone:'',address:'',notes:''}); var customer = customerState[0]; var setCustomer = customerState[1];
-  var orderTypeState = useState('delivery'); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
-  var paymentTypeState = useState(null); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
-  var selZoneState = useState(null); var selZone = selZoneState[0]; var setSelZone = selZoneState[1]; /* null or price string e.g. "2.50" */
+  var orderState = useState(function(){ try{ return JSON.parse(localStorage.getItem('hongs_basket_order')||'[]'); }catch(e){ return []; } }); var order = orderState[0]; var setOrder = orderState[1];
+  var customerState = useState(function(){ try{ return JSON.parse(localStorage.getItem('hongs_basket_customer')||'null')||{name:'',phone:'',address:'',notes:''}; }catch(e){ return {name:'',phone:'',address:'',notes:''}; } }); var customer = customerState[0]; var setCustomer = customerState[1];
+  var orderTypeState = useState(function(){ return localStorage.getItem('hongs_basket_ordertype')||'delivery'; }); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
+  var paymentTypeState = useState(function(){ var v=localStorage.getItem('hongs_basket_payment'); return (v&&v!=='')?v:null; }); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
+  var selZoneState = useState(function(){ var v=localStorage.getItem('hongs_basket_zone'); return (v&&v!=='')?v:null; }); var selZone = selZoneState[0]; var setSelZone = selZoneState[1]; /* null or price string e.g. "2.50" */
   var isDesktopState = useState(function(){ return window.innerWidth >= 800; }); var isDesktop = isDesktopState[0]; var setIsDesktop = isDesktopState[1];
   var tabState = useState(function(){ return window.innerWidth >= 800 ? 'order' : 'menu'; }); var tab = tabState[0]; var setTab = tabState[1];
   var activeCatState = useState('All'); var activeCat = activeCatState[0]; var setActiveCat = activeCatState[1];
@@ -1949,12 +1949,12 @@ function App() {
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
-  var scheduleTypeState = useState('asap'); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
-  var scheduleTimeState = useState(''); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
+  var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
+  var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
-  var discountState = useState({type:null, pct:10, custom:''}); var discount = discountState[0]; var setDiscount = discountState[1];
+  var discountState = useState(function(){ try{ return JSON.parse(localStorage.getItem('hongs_basket_discount')||'null')||{type:null,pct:10,custom:''}; }catch(e){ return {type:null,pct:10,custom:''}; } }); var discount = discountState[0]; var setDiscount = discountState[1];
   /* priceOverride: null or string — manually typed total that replaces computed grand */
-  var priceOverrideState = useState(''); var priceOverride = priceOverrideState[0]; var setPriceOverride = priceOverrideState[1];
+  var priceOverrideState = useState(function(){ return localStorage.getItem('hongs_basket_override')||''; }); var priceOverride = priceOverrideState[0]; var setPriceOverride = priceOverrideState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m5', JSON.stringify(menuItems)); }, [menuItems]);
@@ -1963,6 +1963,15 @@ function App() {
   useEffect(function(){ localStorage.setItem('hongs_q', JSON.stringify(queue)); }, [queue]);
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_order', JSON.stringify(order)); }, [order]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_customer', JSON.stringify(customer)); }, [customer]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_ordertype', orderType); }, [orderType]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_payment', paymentType||''); }, [paymentType]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_zone', selZone||''); }, [selZone]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_schtype', scheduleType); }, [scheduleType]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_schtime', scheduleTime); }, [scheduleTime]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_discount', JSON.stringify(discount)); }, [discount]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_override', priceOverride); }, [priceOverride]);
   useEffect(function(){ if (orderType !== 'delivery') setSelZone(null); }, [orderType]);
   useEffect(function() {
     function fn() { setIsDesktop(window.innerWidth >= 800); }
