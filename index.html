@@ -42,7 +42,8 @@ var C = {
   bg:'#1a1a1a', panel:'#242424', card:'#2e2e2e', border:'#3a3a3a',
   muted:'#777', text:'#e8e8e8', dim:'#aaa',
   accent:'#c8a040', accentBg:'rgba(200,160,64,0.13)',
-  selected:'#302a18', danger:'#a03030', ok:'#2a6a3a'
+  selected:'#302a18', danger:'#a03030', ok:'#2a6a3a',
+  numBadge:'#1e3a52', numBadgeText:'#5bb8f5'
 };
 
 /* ── STATIC DATA ── */
@@ -202,7 +203,6 @@ function printReceipt(ord, paperSize) {
   var fontSize = is58 ? '13px' : '15px';
   var lineH = is58 ? '1.6' : '1.7';
   var padTop = is58 ? '3mm' : '4mm';
-  var mmSize = is58 ? '58mm' : '80mm';
   // Inject correct print CSS dynamically
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
@@ -425,7 +425,7 @@ function MenuScreen(props) {
             onClick: function(){ onAdd(item); },
             style:{width:'100%', background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'block'}
           },
-            h('div', {style:{fontSize:13,fontWeight:800,color:C.muted,marginBottom:2}}, '#' + item.num),
+            h('div', {style:{display:'inline-block',background:C.numBadge,color:C.numBadgeText,fontWeight:900,fontSize:15,lineHeight:1,padding:'3px 8px',borderRadius:6,marginBottom:5,letterSpacing:0.5,minWidth:28,textAlign:'center'}}, item.num === '—' ? '—' : item.num),
             h('div', {style:{fontWeight:700,fontSize:13,lineHeight:1.3,marginBottom:5}}, item.name),
             h('div', {style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
               h('span', {style:{color:C.accent,fontWeight:800,fontSize:13}}, '\u00a3' + item.price.toFixed(2)),
@@ -455,6 +455,7 @@ function MenuScreen(props) {
                 onClick: function(){ onAdd(item); },
                 style:{width:'100%', background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'block'}
               },
+                h('div', {style:{display:'inline-block',background:C.numBadge,color:C.numBadgeText,fontWeight:900,fontSize:15,lineHeight:1,padding:'3px 8px',borderRadius:6,marginBottom:5,letterSpacing:0.5,minWidth:28,textAlign:'center'}}, item.num === '—' ? '—' : item.num),
                 h('div', {style:{fontWeight:700,fontSize:13,lineHeight:1.3,marginBottom:5}}, label),
                 h('div', {style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
                   h('span', {style:{color:C.accent,fontWeight:800,fontSize:13}}, '\u00a3' + item.price.toFixed(2)),
@@ -548,6 +549,244 @@ function MenuScreen(props) {
   );
 }
 
+/* ── DRAGGABLE ORDER LIST ── touch-native drag-to-reorder for Android */
+function DraggableOrderList(props) {
+  var order = props.order;
+  var updateQty = props.updateQty;
+  var updateItemComment = props.updateItemComment;
+  var updateItemExtra = props.updateItemExtra;
+  var updateItemName = props.updateItemName;
+  var reorderOrder = props.reorderOrder;
+
+  /* drag state stored in refs — no re-renders during drag, only on drop */
+  var dragState = useRef(null); /* {fromIdx, ghostEl, itemEl, offsetY, itemHeight} */
+  var itemRefs = useRef([]);
+  var dragOverIdx = useRef(-1);
+
+  function getItemIdx(el) {
+    for (var i = 0; i < itemRefs.current.length; i++) {
+      if (itemRefs.current[i] && (itemRefs.current[i] === el || itemRefs.current[i].contains(el))) return i;
+    }
+    return -1;
+  }
+
+  function onHandleTouchStart(idx, e) {
+    if (e.touches.length !== 1) return;
+    var touch = e.touches[0];
+    var el = itemRefs.current[idx];
+    if (!el) return;
+    var rect = el.getBoundingClientRect();
+
+    /* Create a ghost clone that floats under the finger */
+    var ghost = el.cloneNode(true);
+    ghost.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;' +
+      'opacity:0.85;pointerEvents:none;zIndex:9999;borderRadius:10px;' +
+      'boxShadow:0 8px 24px rgba(0,0,0,0.5);transition:none;';
+    document.body.appendChild(ghost);
+
+    /* Dim the original */
+    el.style.opacity = '0.3';
+
+    dragState.current = {
+      fromIdx: idx,
+      ghostEl: ghost,
+      offsetY: touch.clientY - rect.top,
+      itemHeight: rect.height
+    };
+    dragOverIdx.current = idx;
+    e.preventDefault();
+  }
+
+  function onTouchMove(e) {
+    if (!dragState.current || e.touches.length !== 1) return;
+    e.preventDefault();
+    var touch = e.touches[0];
+    var ds = dragState.current;
+
+    /* Move ghost */
+    ds.ghostEl.style.top = (touch.clientY - ds.offsetY) + 'px';
+
+    /* Find which item slot finger is over */
+    ds.ghostEl.style.display = 'none';
+    var elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+    ds.ghostEl.style.display = '';
+    var overIdx = elBelow ? getItemIdx(elBelow) : -1;
+
+    if (overIdx !== -1 && overIdx !== dragOverIdx.current) {
+      /* Shift placeholder highlight */
+      for (var i = 0; i < itemRefs.current.length; i++) {
+        var ref = itemRefs.current[i];
+        if (!ref) continue;
+        if (i === ds.fromIdx) { ref.style.opacity = '0.3'; continue; }
+        ref.style.borderTop = (i === overIdx && overIdx < ds.fromIdx) ? '3px solid #5bb8f5' : '';
+        ref.style.borderBottom = (i === overIdx && overIdx >= ds.fromIdx) ? '3px solid #5bb8f5' : '';
+      }
+      dragOverIdx.current = overIdx;
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (!dragState.current) return;
+    var ds = dragState.current;
+    document.body.removeChild(ds.ghostEl);
+
+    /* Restore styles */
+    for (var i = 0; i < itemRefs.current.length; i++) {
+      var ref = itemRefs.current[i];
+      if (ref) { ref.style.opacity = ''; ref.style.borderTop = ''; ref.style.borderBottom = ''; }
+    }
+
+    var toIdx = dragOverIdx.current;
+    if (toIdx !== -1 && toIdx !== ds.fromIdx) {
+      reorderOrder(ds.fromIdx, toIdx);
+    }
+
+    dragState.current = null;
+    dragOverIdx.current = -1;
+  }
+
+  /* Attach global touchmove/touchend to window so drag works if finger leaves the list */
+  useEffect(function() {
+    function move(e) { onTouchMove(e); }
+    function end(e) { onTouchEnd(e); }
+    window.addEventListener('touchmove', move, {passive:false});
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
+    return function() {
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', end);
+      window.removeEventListener('touchcancel', end);
+    };
+  }, [order]); /* re-bind when order changes so getItemIdx closure is fresh */
+
+  /* Trim stale refs when order shrinks */
+  itemRefs.current = itemRefs.current.slice(0, order.length);
+
+  return h(React.Fragment, null,
+    order.map(function(item, idx) {
+      var isCustom = item.custom === true;
+      return h('div', {
+        key: item.id + '_' + idx,
+        ref: function(el){ itemRefs.current[idx] = el; },
+        style:{marginBottom:7,background:C.card,borderRadius:10,border:'1px solid ' + (isCustom ? C.accent : C.border),overflow:'hidden',transition:'border 0.1s'}
+      },
+        h('div', {style:{display:'flex',alignItems:'center',gap:8,padding:'10px 12px'}},
+          /* Drag handle */
+          h('div', {
+            onTouchStart: function(e){ onHandleTouchStart(idx, e); },
+            style:{flexShrink:0,width:22,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,padding:'4px 2px',cursor:'grab',touchAction:'none',opacity:0.45}
+          },
+            h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}}),
+            h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}}),
+            h('div', {style:{width:14,height:2,background:C.dim,borderRadius:1}})
+          ),
+          h('div', {style:{flex:1,minWidth:0}},
+            isCustom
+              ? h('input', {
+                  placeholder:'✏️ Item name...',
+                  value: item.name === 'Custom Item' ? '' : item.name,
+                  onChange: function(e){ updateItemName(item.id, e.target.value || 'Custom Item'); },
+                  style:{width:'100%', background:'transparent', border:'none', borderBottom:'1px solid ' + C.accent, color:C.text, fontSize:13, fontWeight:600, outline:'none', padding:'2px 0'}
+                })
+              : h('div', {style:{fontSize:13,fontWeight:600,lineHeight:1.3}}, item.name),
+            h('div', {style:{fontSize:13,color:C.accent,fontWeight:700,marginTop:2}},
+              '\u00a3' + (item.price * item.qty + (parseFloat(item.extra) || 0)).toFixed(2),
+              !isCustom && item.extra && parseFloat(item.extra) > 0 && h('span', {style:{fontSize:11,color:C.muted,marginLeft:4}}, '(+\u00a3' + parseFloat(item.extra).toFixed(2) + ' extra)')
+            )
+          ),
+          h('div', {style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}},
+            h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,-1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '−'),
+            h('span', {style:{fontSize:15,fontWeight:700,minWidth:20,textAlign:'center'}}, item.qty),
+            h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '+')
+          )
+        ),
+        h('div', {style:{padding:'0 10px 8px 10px', display:'flex', gap:6}},
+          isCustom
+            ? h(React.Fragment, null,
+                h('input', {
+                  type:'number', inputMode:'decimal', placeholder:'£ Price',
+                  value: item.extra || '',
+                  onChange: function(e){ updateItemExtra(item.id, e.target.value); },
+                  style:{flex:1, background:C.bg, border:'1px solid ' + C.accent, borderRadius:7, padding:'6px 10px', color:C.accent, fontSize:13, outline:'none', fontWeight:700}
+                }),
+                h('textarea', {
+                  placeholder:'✏️ Note...',
+                  value: item.comment || '',
+                  rows: 1,
+                  onChange: function(e){
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                    updateItemComment(item.id, e.target.value);
+                  },
+                  style:{flex:2, background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 10px', color: item.comment ? C.text : C.muted, fontSize:12, outline:'none', resize:'none', overflow:'hidden', lineHeight:'1.4', fontFamily:'inherit'}
+                })
+              )
+            : h(React.Fragment, null,
+                h('textarea', {
+                  placeholder:'✏️ Note...',
+                  value: item.comment || '',
+                  rows: 1,
+                  onChange: function(e){
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                    updateItemComment(item.id, e.target.value);
+                  },
+                  style:{flex:1, background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 10px', color: item.comment ? C.text : C.muted, fontSize:12, outline:'none', resize:'none', overflow:'hidden', lineHeight:'1.4', fontFamily:'inherit'}
+                }),
+                h('input', {
+                  type:'number', inputMode:'decimal', placeholder:'+£',
+                  value: item.extra || '',
+                  onChange: function(e){ updateItemExtra(item.id, e.target.value); },
+                  style:{width:60, background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 8px', color:C.accent, fontSize:12, outline:'none', fontWeight:700, textAlign:'center'}
+                })
+              )
+        )
+      );
+    })
+  );
+}
+
+/* ── DISCOUNT PCT INPUT ── uncontrolled-style to avoid Android clamp glitch */
+function DiscountPctInput(props) {
+  var discount = props.discount;
+  var setDiscount = props.setDiscount;
+  /* raw string while typing so partial input (e.g. "" or "2") isn't clamped mid-keystroke */
+  var rawState = useState(String(discount.pct));
+  var raw = rawState[0];
+  var setRaw = rawState[1];
+
+  /* Keep raw in sync if parent changes pct externally (e.g. Remove button resets to 10) */
+  var prevPct = useRef(discount.pct);
+  if (prevPct.current !== discount.pct) {
+    prevPct.current = discount.pct;
+    /* Only sync if raw doesn't already represent the same value */
+    if (parseInt(raw, 10) !== discount.pct) setRaw(String(discount.pct));
+  }
+
+  return h('input', {
+    type:'text',
+    inputMode:'numeric',
+    placeholder:'%',
+    value: raw,
+    onFocus: function(e){ e.target.select(); },
+    onChange: function(e){
+      var v = e.target.value.replace(/[^0-9]/g, '');
+      setRaw(v);
+      var n = parseInt(v, 10);
+      if (!isNaN(n) && n >= 1 && n <= 99) {
+        setDiscount(function(p){ return Object.assign({},p,{pct:n, type:'pct'}); });
+      }
+    },
+    onBlur: function(){
+      var n = parseInt(raw, 10);
+      var clamped = isNaN(n) ? 10 : Math.min(99, Math.max(1, n));
+      setRaw(String(clamped));
+      setDiscount(function(p){ return Object.assign({},p,{pct:clamped, type:'pct'}); });
+    },
+    style:{width:52,background:C.bg,border:'1px solid ' + C.border,borderRadius:8,padding:'7px 8px',color:C.text,fontSize:13,outline:'none',textAlign:'center'}
+  });
+}
+
 /* ── BASKET SCREEN ── */
 function BasketScreen(props) {
   var order = props.order;
@@ -555,6 +794,7 @@ function BasketScreen(props) {
   var updateItemComment = props.updateItemComment;
   var updateItemExtra = props.updateItemExtra;
   var updateItemName = props.updateItemName;
+  var reorderOrder = props.reorderOrder;
   var customer = props.customer;
   var setCustomer = props.setCustomer;
   var orderType = props.orderType;
@@ -728,73 +968,7 @@ function BasketScreen(props) {
       ),
       order.length === 0
         ? h('div', {style:{textAlign:'center',padding:'20px',color:C.muted,fontSize:14,background:C.card,borderRadius:10,border:'1px solid ' + C.border}}, 'No items yet — tap the Menu tab to add')
-        : order.map(function(item) {
-          var isCustom = item.custom === true;
-          return h('div', {key:item.id + '_' + (item._idx||0), style:{marginBottom:7,background:C.card,borderRadius:10,border:'1px solid ' + (isCustom ? C.accent : C.border),overflow:'hidden'}},
-            h('div', {style:{display:'flex',alignItems:'center',gap:8,padding:'10px 12px'}},
-              h('div', {style:{flex:1,minWidth:0}},
-                isCustom
-                  ? h('input', {
-                      placeholder:'✏️ Item name...',
-                      value: item.name === 'Custom Item' ? '' : item.name,
-                      onChange: function(e){ updateItemName(item.id, e.target.value || 'Custom Item'); },
-                      style:{width:'100%', background:'transparent', border:'none', borderBottom:'1px solid ' + C.accent, color:C.text, fontSize:13, fontWeight:600, outline:'none', padding:'2px 0'}
-                    })
-                  : h('div', {style:{fontSize:13,fontWeight:600,lineHeight:1.3}}, item.name),
-                h('div', {style:{fontSize:13,color:C.accent,fontWeight:700,marginTop:2}},
-                  '\u00a3' + (item.price * item.qty + (parseFloat(item.extra) || 0)).toFixed(2),
-                  !isCustom && item.extra && parseFloat(item.extra) > 0 && h('span', {style:{fontSize:11,color:C.muted,marginLeft:4}}, '(+\u00a3' + parseFloat(item.extra).toFixed(2) + ' extra)')
-                )
-              ),
-              h('div', {style:{display:'flex',alignItems:'center',gap:6,flexShrink:0}},
-                h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,-1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '−'),
-                h('span', {style:{fontSize:15,fontWeight:700,minWidth:20,textAlign:'center'}}, item.qty),
-                h('button', {className:'mbtn', onClick:function(){ updateQty(item.id,1); }, style:{width:34,height:34,borderRadius:8,border:'1px solid ' + C.border,background:C.bg,color:C.text,cursor:'pointer',fontSize:18,lineHeight:1,fontWeight:700}}, '+')
-              )
-            ),
-            h('div', {style:{padding:'0 10px 8px', display:'flex', gap:6}},
-              isCustom
-                ? h(React.Fragment, null,
-                    h('input', {
-                      type:'number', inputMode:'decimal', placeholder:'£ Price',
-                      value: item.extra || '',
-                      onChange: function(e){ updateItemExtra(item.id, e.target.value); },
-                      style:{flex:1, background:C.bg, border:'1px solid ' + C.accent, borderRadius:7, padding:'6px 10px', color:C.accent, fontSize:13, outline:'none', fontWeight:700}
-                    }),
-                    h('textarea', {
-                      placeholder:'✏️ Note...',
-                      value: item.comment || '',
-                      rows: 1,
-                      onChange: function(e){
-                        e.target.style.height = 'auto';
-                        e.target.style.height = e.target.scrollHeight + 'px';
-                        updateItemComment(item.id, e.target.value);
-                      },
-                      style:{flex:2, background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 10px', color: item.comment ? C.text : C.muted, fontSize:12, outline:'none', resize:'none', overflow:'hidden', lineHeight:'1.4', fontFamily:'inherit'}
-                    })
-                  )
-                : h(React.Fragment, null,
-                    h('textarea', {
-                      placeholder:'✏️ Note...',
-                      value: item.comment || '',
-                      rows: 1,
-                      onChange: function(e){
-                        e.target.style.height = 'auto';
-                        e.target.style.height = e.target.scrollHeight + 'px';
-                        updateItemComment(item.id, e.target.value);
-                      },
-                      style:{flex:1, background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 10px', color: item.comment ? C.text : C.muted, fontSize:12, outline:'none', resize:'none', overflow:'hidden', lineHeight:'1.4', fontFamily:'inherit'}
-                    }),
-                    h('input', {
-                      type:'number', inputMode:'decimal', placeholder:'+£',
-                      value: item.extra || '',
-                      onChange: function(e){ updateItemExtra(item.id, e.target.value); },
-                      style:{width:60, background:C.bg, border:'1px solid ' + C.border, borderRadius:7, padding:'6px 8px', color:C.accent, fontSize:12, outline:'none', fontWeight:700, textAlign:'center'}
-                    })
-                  )
-            )
-          );
-        })
+        : h(DraggableOrderList, {order:order, updateQty:updateQty, updateItemComment:updateItemComment, updateItemExtra:updateItemExtra, updateItemName:updateItemName, reorderOrder:reorderOrder})
     ),
     /* Totals */
     orderType === 'delivery' && foodTotal > 0 && foodTotal < 15 && h('div', {style:{fontSize:12,color:'#e07030',marginBottom:8,textAlign:'center',fontWeight:600}},
@@ -825,12 +999,7 @@ function BasketScreen(props) {
                 onClick:function(){ setDiscount(function(p){ return Object.assign({},p,{type: p.type==='pct' ? null : 'pct'}); }); },
                 style:{padding:'7px 12px',borderRadius:8,border:'1px solid ' + (discount.type==='pct' ? C.accent : C.border),background: discount.type==='pct' ? C.accentBg : 'transparent',color: discount.type==='pct' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}
               }, '−' + discount.pct + '%'),
-              h('input', {
-                type:'number', inputMode:'decimal', min:'1', max:'99', placeholder:'%',
-                value: discount.pct,
-                onChange:function(e){ setDiscount(function(p){ return Object.assign({},p,{pct: Math.min(99,Math.max(1,parseInt(e.target.value)||10)), type:'pct'}); }); },
-                style:{width:52,background:C.bg,border:'1px solid ' + C.border,borderRadius:8,padding:'7px 8px',color:C.text,fontSize:13,outline:'none',textAlign:'center'}
-              }),
+              h(DiscountPctInput, {discount:discount, setDiscount:setDiscount}),
               h('span', {style:{color:C.muted,fontSize:12,padding:'0 2px'}},'or'),
               h('div', {style:{position:'relative',flex:1}},
                 h('span', {style:{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:C.muted,fontSize:13,pointerEvents:'none'}}, '£'),
@@ -1011,10 +1180,12 @@ function HistoryView(props) {
   function cancelEdit() { setEditingId(null); setDraft(null); }
 
   function saveEdit() {
-    var foodTotal = draft.items.reduce(function(s,o){ return s + o.price * o.qty; }, 0);
+    var foodTotal = draft.items.reduce(function(s,o){ return s + o.price * o.qty + (parseFloat(o.extra)||0); }, 0);
     var deliveryCharge = (draft.orderType === 'delivery' && draft.deliveryZone)
       ? parseCharge(draft.deliveryZone) : 0;
-    var updated = Object.assign({}, draft, {foodTotal:foodTotal, deliveryCharge:deliveryCharge, total:foodTotal+deliveryCharge});
+    var discountAmt = draft.discountAmt || 0;
+    var total = Math.max(0, foodTotal + deliveryCharge - discountAmt);
+    var updated = Object.assign({}, draft, {foodTotal:foodTotal, deliveryCharge:deliveryCharge, total:total});
     setOrders(function(prev){ return prev.map(function(o){ return o.id === updated.id ? updated : o; }); });
     setEditingId(null);
     setDraft(null);
@@ -1058,7 +1229,7 @@ function HistoryView(props) {
       h('div', null,
         h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, '📋 Order History'),
         orders.length > 0 && h('div', {style:{fontSize:12,color:C.muted,marginTop:3}},
-          orders.length + ' orders · Total: \u00a3' + orders.reduce(function(s,o){ return s+o.total; }, 0).toFixed(2)
+          orders.length + ' orders · Total: \u00a3' + orders.reduce(function(s,o){ return s+(o.total||0); }, 0).toFixed(2)
         )
       ),
       orders.length > 0 && h('button', {className:'mbtn', onClick:clearOrders, style:{padding:'7px 13px',borderRadius:8,border:'1px solid ' + C.danger + '60',background:'transparent',color:C.danger,cursor:'pointer',fontSize:12,fontWeight:600}}, 'Clear All')
@@ -1122,7 +1293,7 @@ function HistoryView(props) {
               ),
               h('div', {style:{display:'flex',justifyContent:'space-between',fontWeight:800,fontSize:15,marginTop:7,paddingTop:7,borderTop:'1px solid ' + C.border}},
                 h('span', null, 'TOTAL'),
-                h('span', {style:{color:C.accent}}, '\u00a3' + ((ord.total || (ord.foodTotal||0) + (ord.deliveryCharge||0)) || 0).toFixed(2))
+                h('span', {style:{color:C.accent}}, '\u00a3' + ((ord.total !== undefined ? ord.total : Math.max(0, (ord.foodTotal||0) + (ord.deliveryCharge||0) - (ord.discountAmt||0))) || 0).toFixed(2))
               )
             )
           ),
@@ -1476,6 +1647,7 @@ function App() {
   function delZone(id) { if (window.confirm('Remove zone?')) setZones(function(p){ return p.filter(function(z){ return z.id!==id; }); }); }
   function saveZone() { setZones(function(p){ return p.map(function(z){ return z.id===editZone.id ? Object.assign({},editZone,{price:parseFloat(editZone.price)}) : z; }); }); setEditZone(null); }
 
+  var nowDate = new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
   var smInp = {background:C.bg, border:'1px solid ' + C.border, borderRadius:8, padding:'10px 12px', color:C.text, fontSize:14, outline:'none'};
 
   var header = h('div', {style:{background:C.panel,padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderTop:'1px solid ' + C.border,flexShrink:0}},
@@ -1487,7 +1659,7 @@ function App() {
       )
     ),
     h('div', {style:{textAlign:'right'}},
-      h('div', {style:{fontSize:12,color:C.dim}}, new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})),
+      h('div', {style:{fontSize:12,color:C.dim}}, nowDate),
       h('div', {style:{fontSize:10,color:C.muted}}, 'Delivery min \u00a315')
     )
   );
@@ -1497,13 +1669,23 @@ function App() {
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
+  function reorderOrder(fromIdx, toIdx) {
+    if (fromIdx === toIdx) return;
+    setOrder(function(prev) {
+      var arr = prev.slice();
+      var item = arr.splice(fromIdx, 1)[0];
+      arr.splice(toIdx, 0, item);
+      return arr;
+    });
+  }
+
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
-    var desktopTabs = [['order','🛒 New Order'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['history','📋 History'],['backup','⚙️ Settings & Backup']];
+    var desktopTabs = [['order','🛒 New Order'],['history','📋 History'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['backup','⚙️ Settings & Backup']];
     return h('div', {style:{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},
       header,
       h('div', {style:{display:'flex',background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0,overflowX:'auto'}},
@@ -1530,7 +1712,7 @@ function App() {
   }
 
   /* ── MOBILE ── */
-  var mobileTabs = [['menu','🍜','Menu'],['basket','🛒','Basket'+(itemCount>0?' ('+itemCount+')':'')],['settings','⚙️','Editor'],['backupm','💾','Settings'],['histm','📋','History']];
+  var mobileTabs = [['menu','🍜','Menu'],['basket','🛒','Basket'+(itemCount>0?' ('+itemCount+')':'')],['histm','📋','History'],['settings','⚙️','Editor'],['backupm','💾','Settings']];
   return h('div', {style:{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},
     /* Tab bar at TOP */
     h('div', {style:{display:'flex',background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0}},
