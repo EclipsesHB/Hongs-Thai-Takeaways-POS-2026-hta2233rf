@@ -343,104 +343,14 @@ function printReceipt(ord, paperSize) {
   window.print();
 }
 
-/* ── PRINT ALL RECEIPTS AS ONE JOB (Android BT compatible) ── */
-function printAllReceipts(orders, paperSize) {
-  if (!orders || !orders.length) return;
-  var is58 = paperSize === '58';
-  var W = is58 ? 26 : 36;
-  var mmSize = is58 ? '58mm' : '80mm';
-  var mmWidth = is58 ? '50mm' : '72mm';
-  var fontSize = is58 ? '15px' : '17px';
-  var lineH = is58 ? '1.7' : '1.8';
-  var padTop = is58 ? '3mm' : '4mm';
-  var totalFontSize = is58 ? '17px' : '19px';
-
-  var styleEl = document.getElementById('receipt-print-style');
-  if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 2mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}#receipt-frame .page-break{page-break-before:always;}}';
-
-  var HR = '<hr class="rhr"/>';
-  function line(left, right) { var gap = W - left.length - right.length; return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right; }
-  function buildOrderHtml(ord) {
-    var html = [];
-    function row(txt) { html.push('<div>' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-    function div() { html.push(HR); }
-    function blank() { html.push('<div>&nbsp;</div>'); }
-    function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
-    function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
-    function rowb(txt) { html.push('<div style="font-weight:bold;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-
-    crow("HONG'S THAI TAKEAWAY");
-    crow('01386 423341');
-    crow('9 Four Pools Shopping Centre');
-    crow('Davies Road, Evesham');
-    crow('WR11 1YP');
-    div();
-    crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
-    div();
-    if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
-      crowb('*** SCHEDULED ***'); crowb(ord.scheduleTime.toUpperCase()); div();
-    } else { crowb('*** ASAP ***'); div(); }
-
-    var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
-    var bigLetterFontSize = is58 ? '42px' : '54px';
-    var bigLetterColW = is58 ? '32px' : '42px';
-    function infoRow(txt) { return '<div style="overflow-wrap:break-word;word-break:normal;">' + txt + '</div>'; }
-    function infoBlank() { return '<div>&nbsp;</div>'; }
-    var infoHtml = '';
-    infoHtml += infoRow('Date : ' + ord.date);
-    infoHtml += infoRow('Time : ' + ord.time);
-    infoHtml += infoRow('Name : ' + (ord.customer.name || ''));
-    infoHtml += infoBlank(); infoHtml += infoBlank();
-    infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
-    infoHtml += infoBlank(); infoHtml += infoBlank();
-    if (ord.orderType === 'delivery') {
-      var addrParts = ord.customer.address ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean) : [];
-      if (addrParts.length > 0) { addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part); }); }
-      else { infoHtml += infoRow('Addr : '); }
-      infoHtml += infoBlank(); infoHtml += infoBlank();
-    }
-    html.push('<div class="rflex" style="display:flex;justify-content:space-between;align-items:center;"><div style="flex:1;min-width:0;">' + infoHtml + '</div><div style="flex-shrink:0;width:' + bigLetterColW + ';text-align:right;font-size:' + bigLetterFontSize + ';font-weight:900;line-height:1;">' + bigLetter + '</div></div>');
-    div();
-    if (ord.customer.notes) {
-      div(); row('NOTE:');
-      var words = ord.customer.notes.split(' '); var cur = '';
-      words.forEach(function(w) { if ((cur + ' ' + w).trim().length <= W) { cur = (cur + ' ' + w).trim(); } else { rowb(cur); cur = w; } });
-      if (cur) rowb(cur);
-    }
-    if (ord.paymentType) { div(); row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH')); }
-    div();
-    html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '12px' : '13px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
-    div();
-    ord.items.forEach(function(item) {
-      var extraAmt = parseFloat(item.extra) || 0;
-      var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
-      var qtyStr = item.qty + 'x';
-      html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;"><span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span><span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + item.name + '</span><span style="white-space:nowrap;padding-left:6px;">' + amtStr + '</span></div>');
-      if (extraAmt > 0) row('  + Extra: \u00a3' + extraAmt.toFixed(2));
-      if (item.comment && item.comment.trim()) { item.comment.trim().split('\n').forEach(function(l){ if(l.trim()) rowb('  > ' + l.trim()); }); }
-      blank();
-    });
-    div();
-    if (ord.deliveryCharge > 0 || ord.discountAmt > 0) {
-      row(line('Food subtotal', '\u00a3' + (parseFloat(ord.foodTotal)||0).toFixed(2)));
-      if (ord.deliveryCharge > 0) row(line('Delivery', '\u00a3' + ord.deliveryCharge.toFixed(2)));
-      if (ord.discountAmt > 0) row(line('Discount', '-\u00a3' + ord.discountAmt.toFixed(2)));
-      div();
-    }
-    var safeTotal = Math.max(0, (parseFloat(ord.foodTotal)||0) + (parseFloat(ord.deliveryCharge)||0) - (parseFloat(ord.discountAmt)||0));
-    html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;"><span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
-    div();
-    blank(); blank(); blank(); blank(); blank();
-    return html.join('');
-  }
-
-  var combined = orders.map(function(ord, i) {
-    return (i > 0 ? '<div class="page-break"></div>' : '') + buildOrderHtml(ord);
-  }).join('');
-
-  document.getElementById('receipt-frame').innerHTML = combined;
-  window.print();
+/* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
+/* Stores pending print jobs; PrintQueueModal in React drains them one by one */
+var _printQueue = [];
+var _printQueueListener = null;
+function setPrintQueueListener(fn) { _printQueueListener = fn; }
+function enqueuePrintAll(orders, paperSize, onDone) {
+  _printQueue = orders.map(function(ord){ return {ord:ord, paperSize:paperSize}; });
+  if (_printQueueListener) _printQueueListener(_printQueue.slice(), onDone);
 }
 
 /* ── GROUP MENU ITEMS BY VARIANT GROUP ── */
@@ -1034,23 +944,25 @@ function BasketScreen(props) {
           selectedZone && h('div', {style:{fontSize:14,color:C.accent,fontWeight:700}}, '\u00a3' + parseFloat(selectedZone).toFixed(2))
         )
       ),
-      /* Payment type */
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'PAYMENT'),
-      h('div', {style:{display:'flex',gap:8}},
-        ['cash','card'].map(function(t) {
-          var active = paymentType === t;
-          return h('button', {
-            key:t, className:'mbtn',
-            onClick: function(){ setPaymentType(active ? null : t); },
-            style:{
-              flex:1, padding:'11px 8px', borderRadius:10,
-              border:'1px solid ' + (active ? C.accent : C.border),
-              background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.muted,
-              fontWeight:700, fontSize:14, cursor:'pointer'
-            }
-          }, t === 'cash' ? '💵 Cash' : '💳 Card');
-        })
+      /* Payment type — inline on one row */
+      h('div', {style:{display:'flex',alignItems:'center',gap:8,marginBottom:0}},
+        h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,whiteSpace:'nowrap'}}, 'PAYMENT'),
+        h('div', {style:{display:'flex',gap:6,flex:1}},
+          ['cash','card'].map(function(t) {
+            var active = paymentType === t;
+            return h('button', {
+              key:t, className:'mbtn',
+              onClick: function(){ setPaymentType(active ? null : t); },
+              style:{
+                flex:1, padding:'8px 6px', borderRadius:10,
+                border:'1px solid ' + (active ? C.accent : C.border),
+                background: active ? C.accentBg : 'transparent',
+                color: active ? C.accent : C.muted,
+                fontWeight:700, fontSize:13, cursor:'pointer'
+              }
+            }, t === 'cash' ? '💵 Cash' : '💳 Card');
+          })
+        )
       )
     ),
     /* Items */
@@ -1386,6 +1298,37 @@ function ZoneEditor(props) {
         )
       );
     })
+  );
+}
+
+/* ── PRINT QUEUE MODAL (sequential, Android BT safe) ── */
+function PrintQueueModal(props) {
+  var jobs = props.jobs; // [{ord, paperSize}]
+  var idx = props.idx;
+  var total = jobs.length;
+  var onPrintThis = props.onPrintThis;
+  var onSkip = props.onSkip;
+  var onClose = props.onClose;
+  if (!jobs.length) return null;
+  var job = jobs[idx];
+  var ord = job.ord;
+  return h('div', {style:{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.75)'}},
+    h('div', {style:{background:C.panel,borderRadius:16,padding:24,maxWidth:340,width:'90%',border:'2px solid ' + C.accent,boxShadow:'0 8px 40px rgba(0,0,0,0.6)'}},
+      h('div', {style:{fontWeight:900,fontSize:16,color:C.accent,marginBottom:6}}, '🖨️ Print All — ' + (idx+1) + ' of ' + total),
+      h('div', {style:{fontSize:13,color:C.text,marginBottom:4,fontWeight:700}}, ord.customer.name || 'Walk-in'),
+      h('div', {style:{fontSize:12,color:C.muted,marginBottom:4}}, ord.orderType === 'delivery' ? '🚗 Delivery' : '🏃 Collection'),
+      ord.items.length > 0 && h('div', {style:{fontSize:12,color:C.dim,marginBottom:14}}, ord.items.map(function(i){ return i.qty+'x '+i.name; }).join(', ')),
+      h('div', {style:{fontSize:11,color:C.muted,marginBottom:16,background:C.bg,borderRadius:8,padding:'8px 10px'}},
+        'Tap Print Receipt to open the print dialog for this order. When done, tap Next to print the following order.'
+      ),
+      h('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
+        h('button', {className:'mbtn', onClick:onPrintThis, style:{flex:2,padding:'12px 8px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}},
+          '🖨️ Print Receipt'
+        ),
+        idx < total - 1 && h('button', {className:'mbtn', onClick:onSkip, style:{flex:1,padding:'12px 8px',borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, 'Skip'),
+        h('button', {className:'mbtn', onClick:onClose, style:{flex:1,padding:'12px 8px',borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, idx >= total-1 ? 'Done' : 'Stop')
+      )
+    )
   );
 }
 
@@ -2182,6 +2125,15 @@ function App() {
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
+  var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
+
+  useEffect(function(){
+    setPrintQueueListener(function(jobs, onDone){
+      setPrintModal({jobs:jobs, idx:0, onDone:onDone});
+    });
+    return function(){ setPrintQueueListener(null); };
+  }, []);
+
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
       printReceipt(ord, paperSize);
@@ -2190,9 +2142,11 @@ function App() {
     },
     onPrintAll:function(){
       if(!queue.length) return;
-      printAllReceipts(queue, paperSize);
-      setOrders(function(prev){ return queue.slice().reverse().concat(prev); });
-      setQueue([]);
+      var snap = queue.slice();
+      enqueuePrintAll(snap, paperSize, function(){
+        setOrders(function(prev){ return snap.slice().reverse().concat(prev); });
+        setQueue([]);
+      });
     },
     onClearQueue:function(){
       if(window.confirm('Clear all ' + queue.length + ' orders from the queue? This cannot be undone.'))
@@ -2240,7 +2194,23 @@ function App() {
           tab==='history'  && h(HistoryView, historyProps),
           tab==='backup'   && h(BackupRestore, backupProps)
         )
-      )
+      ),
+      printModal && h(PrintQueueModal, {
+        jobs: printModal.jobs, idx: printModal.idx,
+        onPrintThis: function(){
+          printReceipt(printModal.jobs[printModal.idx].ord, paperSize);
+          var nextIdx = printModal.idx + 1;
+          if (nextIdx >= printModal.jobs.length) {
+            var done = printModal.onDone;
+            setPrintModal(null);
+            if (done) done();
+          } else {
+            setPrintModal(function(m){ return Object.assign({},m,{idx:nextIdx}); });
+          }
+        },
+        onSkip: function(){ setPrintModal(function(m){ return Object.assign({},m,{idx:m.idx+1}); }); },
+        onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
+      })
     );
   }
 
@@ -2270,7 +2240,23 @@ function App() {
         tab==='backupm' && h(BackupRestore, backupProps),
         tab==='histm'   && h(HistoryView, historyProps)
       )
-    )
+    ),
+    printModal && h(PrintQueueModal, {
+      jobs: printModal.jobs, idx: printModal.idx,
+      onPrintThis: function(){
+        printReceipt(printModal.jobs[printModal.idx].ord, paperSize);
+        var nextIdx = printModal.idx + 1;
+        if (nextIdx >= printModal.jobs.length) {
+          var done = printModal.onDone;
+          setPrintModal(null);
+          if (done) done();
+        } else {
+          setPrintModal(function(m){ return Object.assign({},m,{idx:nextIdx}); });
+        }
+      },
+      onSkip: function(){ setPrintModal(function(m){ return Object.assign({},m,{idx:m.idx+1}); }); },
+      onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
+    })
   );
 }
 
