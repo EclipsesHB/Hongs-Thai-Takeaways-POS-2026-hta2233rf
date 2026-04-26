@@ -19,9 +19,10 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
 #receipt-frame{display:none;}
 /* Print styles injected dynamically by printReceipt() */
 @media print{
-  html,body{height:auto!important;overflow:visible!important;}
+  html{height:auto!important;overflow:visible!important;}
+  body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}
   body>*{display:none!important;}
-  #receipt-frame div{page-break-inside:avoid;break-inside:avoid;}
+  #receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;}
   #receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:3px 0;display:block;width:100%;}
 }
 </style>
@@ -200,14 +201,12 @@ function printReceipt(ord, paperSize) {
   var W = is58 ? 26 : 36;
   var mmSize = is58 ? '58mm' : '80mm';
   var mmWidth = is58 ? '50mm' : '72mm';
-  var fontSize = is58 ? '13px' : '15px';
+  var fontSize = is58 ? '15px' : '17px';
   var lineH = is58 ? '1.6' : '1.7';
   var padTop = is58 ? '3mm' : '4mm';
-  // Inject correct print CSS dynamically
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  /* font-weight:bold on receipt-frame makes ALL text bold by default for clearer thermal printing */
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}#receipt-frame{display:block!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 2mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -217,16 +216,15 @@ function printReceipt(ord, paperSize) {
   function row(txt) { html.push('<div>' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
   function div() { html.push(HR); }
   function blank() { html.push('<div>&nbsp;</div>'); }
-
   function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
   function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
   function rowb(txt) { html.push('<div style="font-weight:bold;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+  var addrFs = is58 ? '11px' : '12px';
 
   crow("HONG'S THAI TAKEAWAY");
   crow('01386 423341');
-  crow('9 Four Pools Shopping Centre');
-  crow('Davies Road, Evesham');
-  crow('WR11 1YP');
+  html.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
+  html.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
   div();
   crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
   div();
@@ -238,17 +236,11 @@ function printReceipt(ord, paperSize) {
     crowb('*** ASAP ***');
     div();
   }
-  /* Big D / C letter on right, info on left — helps chef identify order type instantly */
   var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
   var bigLetterFontSize = is58 ? '42px' : '54px';
   var bigLetterColW = is58 ? '32px' : '42px';
-
-  /* Build info lines — each line uses overflow-wrap so full words move to next line */
-  function infoRow(txt) {
-    return '<div style="overflow-wrap:break-word;word-break:normal;">' + txt + '</div>';
-  }
+  function infoRow(txt) { return '<div style="overflow-wrap:break-word;word-break:normal;">' + txt + '</div>'; }
   function infoBlank() { return '<div>&nbsp;</div>'; }
-
   var infoHtml = '';
   infoHtml += infoRow('Date : ' + ord.date);
   infoHtml += infoRow('Time : ' + ord.time);
@@ -256,21 +248,17 @@ function printReceipt(ord, paperSize) {
   infoHtml += infoBlank(); infoHtml += infoBlank();
   infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
   infoHtml += infoBlank(); infoHtml += infoBlank();
-
   if (ord.orderType === 'delivery') {
     var addrParts = ord.customer.address
       ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
       : [];
     if (addrParts.length > 0) {
-      addrParts.forEach(function(part, i) {
-        infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part);
-      });
+      addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part); });
     } else {
       infoHtml += infoRow('Addr : ');
     }
     infoHtml += infoBlank(); infoHtml += infoBlank();
   }
-
   html.push(
     '<div class="rflex" style="display:flex;justify-content:space-between;align-items:center;">' +
     '<div style="flex:1;min-width:0;">' + infoHtml + '</div>' +
@@ -289,57 +277,63 @@ function printReceipt(ord, paperSize) {
     });
     if (cur) rowb(cur);
   }
+  /* Payment before items */
+  if (ord.paymentType) {
+    div();
+    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
+  }
   div();
-  /* Use a simpler flex-style layout for items so qty+amount are always on the same line */
-  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>ITEM</span><span>QTY&nbsp;&nbsp;AMT</span></div>');
+  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
   div();
   ord.items.forEach(function(item) {
     var extraAmt = parseFloat(item.extra) || 0;
     var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
-    var qtyStr = 'x' + item.qty;
-    /* Name on left, qty+amount pinned to right — always same line, words wrap naturally */
+    var qtyStr = item.qty + 'x';
     html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
+      '<span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span>' +
       '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + item.name + '</span>' +
-      '<span style="white-space:nowrap;padding-left:6px;">' + qtyStr + '&nbsp;&nbsp;' + amtStr + '</span>' +
+      '<span style="white-space:nowrap;padding-left:6px;">' + amtStr + '</span>' +
       '</div>');
-    if (extraAmt > 0) {
-      row('  + Extra: \u00a3' + extraAmt.toFixed(2));
-    }
+    if (extraAmt > 0) { row('  + Extra: \u00a3' + extraAmt.toFixed(2)); }
     if (item.comment && item.comment.trim()) {
-      item.comment.trim().split('\n').forEach(function(commentLine) {
-        if (commentLine.trim()) rowb('  > ' + commentLine.trim());
-      });
+      item.comment.trim().split('\n').forEach(function(l) { if (l.trim()) rowb('  > ' + l.trim()); });
     }
     blank();
   });
   div();
-  if (ord.deliveryCharge > 0 || ord.discountAmt > 0) {
-    row(line('Food subtotal', '\u00a3' + (parseFloat(ord.foodTotal)||0).toFixed(2)));
-    if (ord.deliveryCharge > 0) row(line('Delivery', '\u00a3' + ord.deliveryCharge.toFixed(2)));
-    if (ord.discountAmt > 0) row(line('Discount', '-\u00a3' + ord.discountAmt.toFixed(2)));
+  var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
+  var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
+  var discountAmt2 = parseFloat(ord.discountAmt) || 0;
+  var safeTotal = parseFloat(ord.total);
+  if (isNaN(safeTotal)) {
+    safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
+  }
+  safeTotal = Math.max(0, safeTotal);
+  var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
+  if (showSubtotal) {
+    row(line('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
+    if (deliveryAmt > 0) row(line('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
+    if (discountAmt2 > 0) row(line('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
     div();
   }
-  if (ord.paymentType) {
-    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
-    div();
-  }
-  /* Recalculate total fresh as safety net — never missing even if ord.total is wrong */
-  var safeTotal = Math.max(0,
-    (parseFloat(ord.foodTotal) || 0) +
-    (parseFloat(ord.deliveryCharge) || 0) -
-    (parseFloat(ord.discountAmt) || 0)
-  );
-  var totalAmt = '\u00a3' + safeTotal.toFixed(2);
-  var totalFontSize = is58 ? '15px' : '17px';
+  var totalFontSize = is58 ? '17px' : '19px';
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
-    '<span>TOTAL</span><span>' + totalAmt + '</span></div>');
+    '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  /* Feed lines after TOTAL so there is room to tear the receipt */
   blank(); blank(); blank(); blank(); blank();
 
-  /* Single copy — printer service handles copy count externally */
   document.getElementById('receipt-frame').innerHTML = html.join('');
-  window.print();
+  setTimeout(function(){ window.print(); }, 80);
+}
+
+/* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
+/* Stores pending print jobs; PrintQueueModal in React drains them one by one */
+var _printQueue = [];
+var _printQueueListener = null;
+function setPrintQueueListener(fn) { _printQueueListener = fn; }
+function enqueuePrintAll(orders, paperSize, onDone) {
+  _printQueue = orders.map(function(ord){ return {ord:ord, paperSize:paperSize}; });
+  if (_printQueueListener) _printQueueListener(_printQueue.slice(), onDone);
 }
 
 /* ── GROUP MENU ITEMS BY VARIANT GROUP ── */
@@ -798,6 +792,8 @@ function BasketScreen(props) {
   var setPriceOverride = props.setPriceOverride;
   var grandTotal = props.grandTotal;
   var onSubmit = props.onSubmit;
+  var onQueue = props.onQueue;
+  var onClearOrder = props.onClearOrder;
   var paymentType = props.paymentType;
   var setPaymentType = props.setPaymentType;
   var scheduleType = props.scheduleType;
@@ -831,35 +827,6 @@ function BasketScreen(props) {
             }
           }, t === 'delivery' ? '🚗 Delivery' : '🏃 Collection');
         })
-      )
-    ),
-    /* Delivery charge */
-    orderType === 'delivery' && h('div', {style:{marginBottom:12}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'DELIVERY CHARGE'),
-      h('div', {style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,marginBottom:6}},
-        DELIVERY_PRICES.map(function(p) {
-          var sel = selectedZone === p;
-          return h('button', {
-            key: p, className:'mbtn',
-            onClick: function(){ setSelectedZone(sel ? null : p); },
-            style:{
-              padding:'9px 4px', borderRadius:9, textAlign:'center',
-              border:'1px solid ' + (sel ? C.accent : C.border),
-              background: sel ? C.accentBg : 'transparent',
-              color: sel ? C.accent : C.dim,
-              fontSize:14, fontWeight:700, cursor:'pointer'
-            }
-          }, '\u00a3' + p);
-        })
-      ),
-      h('div', {style:{display:'flex',alignItems:'center',gap:8}},
-        h('input', {
-          type:'number', step:'0.50', min:'0', placeholder:'Custom \u00a3',
-          value: selectedZone && DELIVERY_PRICES.indexOf(selectedZone) === -1 ? selectedZone : '',
-          onChange: function(e){ setSelectedZone(e.target.value || null); },
-          style:{flex:1, background:C.bg, border:'1px solid ' + C.border, borderRadius:9, padding:'9px 11px', color:C.text, fontSize:14, outline:'none'}
-        }),
-        selectedZone && h('div', {style:{fontSize:14,color:C.accent,fontWeight:700}}, '\u00a3' + parseFloat(selectedZone).toFixed(2))
       )
     ),
     /* Schedule */
@@ -932,6 +899,35 @@ function BasketScreen(props) {
       h('input', {style:inp, type:'tel', inputMode:'numeric', placeholder:'📞 Phone', value:customer.phone, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{phone:e.target.value}); }); }}),
       orderType === 'delivery' && h('textarea', {style:Object.assign({},inp,{resize:'none',textTransform:'uppercase'}), rows:2, placeholder:'🏠 Delivery address', value:customer.address, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{address:e.target.value}); }); }}),
       h('textarea', {style:Object.assign({},inp,{marginBottom:8,resize:'none'}), rows:2, placeholder:'📝 Special requests / allergies...', value:customer.notes, onChange:function(e){ setCustomer(function(p){ return Object.assign({},p,{notes:e.target.value}); }); }}),
+      /* Delivery charge — shown here for delivery orders */
+      orderType === 'delivery' && h('div', {style:{marginBottom:8}},
+        h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'DELIVERY CHARGE'),
+        h('div', {style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,marginBottom:6}},
+          DELIVERY_PRICES.map(function(p) {
+            var sel = selectedZone === p;
+            return h('button', {
+              key: p, className:'mbtn',
+              onClick: function(){ setSelectedZone(sel ? null : p); },
+              style:{
+                padding:'9px 4px', borderRadius:9, textAlign:'center',
+                border:'1px solid ' + (sel ? C.accent : C.border),
+                background: sel ? C.accentBg : 'transparent',
+                color: sel ? C.accent : C.dim,
+                fontSize:14, fontWeight:700, cursor:'pointer'
+              }
+            }, '\u00a3' + p);
+          })
+        ),
+        h('div', {style:{display:'flex',alignItems:'center',gap:8}},
+          h('input', {
+            type:'number', step:'0.50', min:'0', placeholder:'Custom \u00a3',
+            value: selectedZone && DELIVERY_PRICES.indexOf(selectedZone) === -1 ? selectedZone : '',
+            onChange: function(e){ setSelectedZone(e.target.value || null); },
+            style:{flex:1, background:C.bg, border:'1px solid ' + C.border, borderRadius:9, padding:'9px 11px', color:C.text, fontSize:14, outline:'none'}
+          }),
+          selectedZone && h('div', {style:{fontSize:14,color:C.accent,fontWeight:700}}, '\u00a3' + parseFloat(selectedZone).toFixed(2))
+        )
+      ),
       /* Payment type */
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,marginBottom:7,letterSpacing:1.5}}, 'PAYMENT'),
       h('div', {style:{display:'flex',gap:8}},
@@ -1009,7 +1005,7 @@ function BasketScreen(props) {
                   type:'number', inputMode:'decimal', min:'0', placeholder:'Set exact total',
                   value: priceOverride,
                   onFocus: function(e){ e.target.select(); },
-                  onChange: function(e){ setPriceOverride(e.target.value); },
+                  onChange: function(e){ setPriceOverride(e.target.value); if(e.target.value !== '') { setDiscount({type:null,pct:10,custom:''}); } },
                   style:{width:'100%',background:C.bg,border:'1px solid ' + (priceOverride !== '' ? '#e07030' : C.border),borderRadius:8,padding:'7px 8px 7px 24px',color:'#e07030',fontSize:13,outline:'none',fontWeight:700,boxSizing:'border-box'}
                 })
               )
@@ -1047,9 +1043,34 @@ function BasketScreen(props) {
           color: order.length ? C.bg : C.muted,
           fontWeight:800, fontSize:16, cursor: order.length ? 'pointer' : 'not-allowed',
           letterSpacing:0.5,
-          boxShadow: order.length ? '0 4px 16px rgba(200,160,64,0.3)' : 'none'
+          boxShadow: order.length ? '0 4px 16px rgba(200,160,64,0.3)' : 'none',
+          marginBottom:8
         }
-      }, 'PLACE ORDER & PRINT 🖨️')
+      }, 'PLACE ORDER & PRINT 🖨️'),
+      h('div', {style:{display:'flex', gap:8}},
+        h('button', {
+          className:'mbtn', onClick:onQueue, disabled:!order.length,
+          style:{
+            flex:1, padding:'9px 12px', borderRadius:10,
+            border:'1px solid ' + (order.length ? C.border : C.border),
+            background:'transparent',
+            color: order.length ? C.dim : C.muted,
+            fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
+            letterSpacing:0.3
+          }
+        }, '📋 Add to Queue'),
+        h('button', {
+          className:'mbtn', onClick:onClearOrder, disabled:!order.length,
+          style:{
+            padding:'9px 12px', borderRadius:10,
+            border:'1px solid ' + (order.length ? C.danger+'80' : C.border),
+            background:'transparent',
+            color: order.length ? C.danger : C.muted,
+            fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
+            whiteSpace:'nowrap'
+          }
+        }, '🗑️ Clear')
+      )
     )
   );
 }
@@ -1275,6 +1296,268 @@ function ZoneEditor(props) {
   );
 }
 
+/* ── PRINT QUEUE MODAL (sequential, Android BT safe) ── */
+function PrintQueueModal(props) {
+  var jobs = props.jobs;
+  var idx = props.idx;
+  var total = jobs.length;
+  var onPrintThis = props.onPrintThis;
+  var onNext = props.onNext;
+  var onClose = props.onClose;
+  var printedState = useState(false); var printed = printedState[0]; var setPrinted = printedState[1];
+
+  useEffect(function(){ setPrinted(false); }, [idx]);
+
+  if (!jobs.length) return null;
+  var ord = jobs[idx].ord;
+  var isLast = idx >= total - 1;
+
+  return h('div', {style:{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.82)'}},
+    h('div', {style:{background:C.panel,borderRadius:16,padding:24,maxWidth:320,width:'90%',border:'2px solid ' + C.accent,boxShadow:'0 8px 40px rgba(0,0,0,0.6)'}},
+      h('div', {style:{fontWeight:900,fontSize:15,color:C.accent,marginBottom:8}}, '🖨️ ' + (idx+1) + ' / ' + total),
+      h('div', {style:{fontWeight:700,fontSize:14,marginBottom:2}}, ord.customer.name || 'Walk-in'),
+      h('div', {style:{fontSize:12,color:C.muted,marginBottom:10}},
+        (ord.orderType === 'delivery' ? '🚗 Delivery' : '🏃 Collection') +
+        (ord.paymentType ? '  ·  ' + (ord.paymentType === 'cash' ? '💵 Cash' : '💳 Card') : '')
+      ),
+      h('div', {style:{fontSize:12,color:C.dim,marginBottom:16,lineHeight:1.5}},
+        ord.items.map(function(i){ return i.qty + 'x ' + i.name; }).join(', ')
+      ),
+      !printed
+        ? h('button', {className:'mbtn', onClick:function(){ onPrintThis(); setPrinted(true); }, style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:15,cursor:'pointer'}},
+            '🖨️ Print Receipt'
+          )
+        : h('div', null,
+            h('div', {style:{textAlign:'center',color:'#70e890',fontWeight:700,fontSize:13,marginBottom:12}}, '✅ Printed — confirm receipt is out'),
+            h('div', {style:{display:'flex',gap:8}},
+              isLast
+                ? h('button', {className:'mbtn', onClick:onClose, style:{flex:1,padding:'12px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, '✅ Done')
+                : h('button', {className:'mbtn', onClick:onNext, style:{flex:1,padding:'12px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, 'Next → ' + (idx+2) + ' / ' + total),
+              h('button', {className:'mbtn', onClick:onClose, style:{padding:'12px 14px',borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, 'Stop')
+            )
+          )
+    )
+  );
+}
+
+/* ── QUEUE VIEW ── */
+function QueueView(props) {
+  var queue = props.queue;
+  var setQueue = props.setQueue;
+  var orders = props.orders;
+  var setOrders = props.setOrders;
+  var onPrint = props.onPrint;
+  var onPrintAll = props.onPrintAll;
+  var onClearQueue = props.onClearQueue;
+  var menuItems = props.menuItems;
+  var setTab = props.setTab;
+
+  var editingIdState = useState(null); var editingId = editingIdState[0]; var setEditingId = editingIdState[1];
+  var draftState = useState(null); var draft = draftState[0]; var setDraft = draftState[1];
+  var itemSearchState = useState(''); var itemSearch = itemSearchState[0]; var setItemSearch = itemSearchState[1];
+
+  function startEdit(ord) { setEditingId(ord.id); setDraft(JSON.parse(JSON.stringify(ord))); setItemSearch(''); }
+  function cancelEdit() { setEditingId(null); setDraft(null); }
+
+  function saveEdit() {
+    var foodTotal = draft.items.reduce(function(s,o){ return s + o.price * o.qty + (parseFloat(o.extra)||0); }, 0);
+    var deliveryCharge = (draft.orderType === 'delivery' && draft.deliveryZone) ? parseCharge(draft.deliveryZone) : 0;
+    var discountAmt = draft.discountAmt || 0;
+    var total = Math.max(0, foodTotal + deliveryCharge - discountAmt);
+    var updated = Object.assign({}, draft, {foodTotal:foodTotal, deliveryCharge:deliveryCharge, total:total});
+    setQueue(function(prev){ return prev.map(function(q){ return q.id === updated.id ? updated : q; }); });
+    setEditingId(null); setDraft(null);
+  }
+
+  function removeFromQueue(id) {
+    if (window.confirm('Remove this order from the queue?'))
+      setQueue(function(prev){ return prev.filter(function(q){ return q.id !== id; }); });
+  }
+
+  function draftQty(idx, d) {
+    var items = draft.items.slice();
+    items[idx] = Object.assign({}, items[idx], {qty: Math.max(0, items[idx].qty + d)});
+    setDraft(Object.assign({}, draft, {items: items.filter(function(i){ return i.qty > 0; })}));
+  }
+  function draftRemove(idx) {
+    setDraft(Object.assign({}, draft, {items: draft.items.filter(function(_,i){ return i !== idx; })}));
+  }
+  function draftAddItem(item) {
+    var ex = draft.items.findIndex(function(i){ return i.id === item.id; });
+    var items;
+    if (ex >= 0) { items = draft.items.slice(); items[ex] = Object.assign({}, items[ex], {qty: items[ex].qty + 1}); }
+    else { items = draft.items.concat([Object.assign({}, item, {qty:1})]); }
+    setDraft(Object.assign({}, draft, {items:items}));
+    setItemSearch('');
+  }
+
+  var q2 = itemSearch.trim().toLowerCase();
+  var searchResults = q2 ? menuItems.filter(function(i){ return i.name.toLowerCase().indexOf(q2) !== -1; }).slice(0, 6) : [];
+
+  var inp2 = {width:'100%',background:C.bg,border:'1px solid ' + C.accent,borderRadius:8,padding:'8px 10px',color:C.text,fontSize:13,marginBottom:6,outline:'none'};
+  var qTotal = queue.reduce(function(s,o){ return s+(o.total||0); }, 0);
+
+  return h('div', null,
+    /* Header */
+    h('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,flexWrap:'wrap',gap:8}},
+      h('div', null,
+        h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, '📋 Order Queue'),
+        queue.length > 0 && h('div', {style:{fontSize:12,color:C.muted,marginTop:3}},
+          queue.length + ' order' + (queue.length!==1?'s':'') + ' · Total: £' + qTotal.toFixed(2)
+        )
+      ),
+      h('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
+        queue.length > 0 && h('button', {
+          className:'mbtn',
+          onClick: onPrintAll,
+          style:{padding:'8px 14px',borderRadius:9,border:'none',background:C.accent,color:C.bg,cursor:'pointer',fontSize:13,fontWeight:800}
+        }, '🖨️ Print All (' + queue.length + ')'),
+        queue.length > 0 && h('button', {
+          className:'mbtn',
+          onClick: onClearQueue,
+          style:{padding:'8px 14px',borderRadius:9,border:'1px solid ' + C.danger + '80',background:'transparent',color:C.danger,cursor:'pointer',fontSize:13,fontWeight:700}
+        }, '🗑️ Clear All'),
+        h('button', {
+          className:'mbtn',
+          onClick: function(){ setTab && setTab('order'); },
+          style:{padding:'8px 14px',borderRadius:9,border:'1px solid ' + C.border,background:'transparent',color:C.text,cursor:'pointer',fontSize:13,fontWeight:700}
+        }, '+ New Order')
+      )
+    ),
+    h('div', {style:{height:14}}),
+    queue.length === 0
+      ? h('div', {style:{textAlign:'center',padding:'50px 20px',color:C.muted}},
+          h('div', {style:{fontSize:36,marginBottom:10}}, '📭'),
+          h('div', {style:{fontWeight:600,marginBottom:6}}, 'Queue is empty'),
+          h('div', {style:{fontSize:13,marginBottom:20}}, 'Take an order and it will appear here'),
+          h('button', {className:'mbtn', onClick:function(){ setTab && setTab('order'); }, style:{padding:'12px 24px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, '🛒 New Order')
+        )
+      : queue.map(function(ord, ordIdx) {
+          var isEditing = editingId === ord.id;
+          var dFoodTotal = isEditing ? draft.items.reduce(function(s,o){ return s+o.price*o.qty+(parseFloat(o.extra)||0); }, 0) : ord.items.reduce(function(s,o){ return s+o.price*o.qty+(parseFloat(o.extra)||0); }, 0);
+          var dDelCharge = isEditing ? (draft.orderType==='delivery' && draft.deliveryZone ? parseCharge(draft.deliveryZone) : 0) : (ord.deliveryCharge || 0);
+          var dTotal = dFoodTotal + dDelCharge - (isEditing ? (draft.discountAmt||0) : (ord.discountAmt||0));
+
+          return h('div', {key:ord.id, style:{background:C.panel,borderRadius:12,padding:14,marginBottom:12,border:'2px solid ' + (isEditing ? C.accent : C.border),boxShadow: isEditing ? '0 0 0 1px ' + C.accent + '40' : 'none'}},
+            /* Queue number badge + header */
+            h('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:5}},
+              h('div', {style:{display:'flex',alignItems:'center',gap:8}},
+                h('div', {style:{background:C.accent,color:C.bg,fontWeight:900,fontSize:14,width:28,height:28,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}, '#' + (ordIdx+1)),
+                h('div', null,
+                  h('div', {style:{fontWeight:700,fontSize:14}}, ord.customer.name || 'Walk-in'),
+                  ord.customer.phone && h('div', {style:{color:C.muted,fontSize:12}}, '📞 ' + ord.customer.phone)
+                )
+              ),
+              h('div', {style:{display:'flex',gap:5,alignItems:'center',flexWrap:'wrap'}},
+                h('span', {style:{fontSize:11,padding:'2px 9px',borderRadius:10,fontWeight:700,background:C.accentBg,color:C.accent}},
+                  ord.orderType === 'delivery' ? '🚗 DELIVERY' : '🏃 COLLECTION'
+                ),
+                ord.scheduleType === 'scheduled' && ord.scheduleTime
+                  ? h('span', {style:{fontSize:11,padding:'2px 9px',borderRadius:10,fontWeight:700,background:'rgba(200,100,64,0.15)',color:'#e07830'}}, '🕐 ' + ord.scheduleTime)
+                  : h('span', {style:{fontSize:11,padding:'2px 9px',borderRadius:10,fontWeight:700,background:'rgba(42,106,58,0.2)',color:'#70e890'}}, '⚡ ASAP'),
+                h('span', {style:{fontSize:11,color:C.muted}}, ord.time),
+                !isEditing && h(React.Fragment, null,
+                  h('button', {className:'mbtn', onClick:function(){ onPrint(ord); }, style:{padding:'6px 11px',borderRadius:8,border:'none',background:C.accent,color:C.bg,cursor:'pointer',fontSize:12,fontWeight:800}}, '🖨️ Print'),
+                  h('button', {className:'mbtn', onClick:function(){ startEdit(ord); }, style:{padding:'6px 10px',borderRadius:8,border:'1px solid ' + C.border,background:'transparent',color:C.muted,cursor:'pointer',fontSize:12,fontWeight:700}}, '✏️ Edit'),
+                  h('button', {className:'mbtn', onClick:function(){ removeFromQueue(ord.id); }, style:{padding:'6px 10px',borderRadius:8,border:'1px solid ' + C.danger + '60',background:'transparent',color:C.danger,cursor:'pointer',fontSize:12,fontWeight:700}}, '🗑️')
+                )
+              )
+            ),
+            /* View mode */
+            !isEditing && h(React.Fragment, null,
+              ord.customer.address && h('div', {style:{fontSize:12,color:C.muted,marginBottom:5}}, '📍 ' + ord.customer.address),
+              ord.customer.notes && h('div', {style:{fontSize:12,color:'#c8a060',marginBottom:7,background:'rgba(200,160,64,0.07)',padding:'5px 9px',borderRadius:6}}, '📝 ' + ord.customer.notes),
+              h('div', {style:{borderTop:'1px solid ' + C.border,paddingTop:8}},
+                ord.items.map(function(item,i) {
+                  return h('div', {key:i, style:{marginBottom:4}},
+                    h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:13}},
+                      h('span', null, item.name + ' × ' + item.qty),
+                      h('span', {style:{color:C.accent}}, '£' + (item.price * item.qty + (parseFloat(item.extra)||0)).toFixed(2))
+                    ),
+                    item.comment && item.comment.trim() && h('div', {style:{fontSize:11,color:'#c8a060',paddingLeft:8}}, '↳ ' + item.comment.trim())
+                  );
+                }),
+                ord.deliveryCharge > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:5,paddingTop:5,borderTop:'1px solid ' + C.border,color:C.dim}},
+                  h('span', null, '🚗 Delivery (' + ord.deliveryZone + ')'), h('span', null, '£' + ord.deliveryCharge.toFixed(2))
+                ),
+                ord.discountAmt > 0 && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:3,color:'#e07070'}},
+                  h('span', null, 'Discount'), h('span', null, '−£' + ord.discountAmt.toFixed(2))
+                ),
+                ord.paymentType && h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,marginTop:5,paddingTop:5,borderTop:'1px solid ' + C.border,color:C.dim}},
+                  h('span', null, ord.paymentType === 'card' ? '💳 Card' : '💵 Cash')
+                ),
+                h('div', {style:{display:'flex',justifyContent:'space-between',fontWeight:800,fontSize:15,marginTop:7,paddingTop:7,borderTop:'1px solid ' + C.border}},
+                  h('span', null, 'TOTAL'), h('span', {style:{color:C.accent}}, '£' + ((ord.total||0)).toFixed(2))
+                )
+              )
+            ),
+            /* Edit mode */
+            isEditing && h('div', null,
+              h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,marginBottom:5,letterSpacing:1.5}}, 'ORDER TYPE'),
+              h('div', {style:{display:'flex',gap:7,marginBottom:10}},
+                ['delivery','collection'].map(function(t) {
+                  return h('button', {key:t, className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{orderType:t})); }, style:{flex:1,padding:'7px 4px',borderRadius:8,border:'1px solid ' + (draft.orderType===t?C.accent:C.border),background:draft.orderType===t?C.accentBg:'transparent',color:draft.orderType===t?C.accent:C.muted,fontWeight:700,fontSize:12,cursor:'pointer'}},
+                    t==='delivery'?'🚗 Delivery':'🏃 Collection'
+                  );
+                })
+              ),
+              draft.orderType === 'delivery' && h('div', {style:{marginBottom:10}},
+                h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,marginBottom:5,letterSpacing:1.5}}, 'DELIVERY CHARGE'),
+                h('div', {style:{display:'flex',flexWrap:'wrap',gap:5,marginBottom:5}},
+                  DELIVERY_PRICES.map(function(p) {
+                    var dz = draft.deliveryZone;
+                    var sel = dz === '£' + parseFloat(p).toFixed(2) || dz === p;
+                    return h('button', {key:p, className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{deliveryZone:'£'+parseFloat(p).toFixed(2)})); }, style:{padding:'4px 8px',borderRadius:7,border:'1px solid '+(sel?C.accent:C.border),background:sel?C.accentBg:'transparent',color:sel?C.accent:C.dim,fontSize:11,fontWeight:600,cursor:'pointer'}}, '£' + p);
+                  })
+                ),
+                h('input', {type:'number', step:'0.50', min:'0', placeholder:'Custom £', value:'', onChange:function(e){ if(e.target.value) setDraft(Object.assign({},draft,{deliveryZone:'£'+parseFloat(e.target.value).toFixed(2)})); }, style:{width:'100%',background:C.bg,border:'1px solid '+C.border,borderRadius:7,padding:'5px 9px',color:C.text,fontSize:12,outline:'none'}})
+              ),
+              h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,marginBottom:5,letterSpacing:1.5}}, 'CUSTOMER'),
+              h('input', {style:inp2, placeholder:'👤 Name', value:draft.customer.name, onChange:function(e){ setDraft(Object.assign({},draft,{customer:Object.assign({},draft.customer,{name:e.target.value})})); }}),
+              h('input', {style:inp2, placeholder:'📞 Phone', value:draft.customer.phone, onChange:function(e){ setDraft(Object.assign({},draft,{customer:Object.assign({},draft.customer,{phone:e.target.value})})); }}),
+              draft.orderType === 'delivery' && h('textarea', {style:Object.assign({},inp2,{resize:'none'}), rows:2, placeholder:'🏠 Address', value:draft.customer.address, onChange:function(e){ setDraft(Object.assign({},draft,{customer:Object.assign({},draft.customer,{address:e.target.value})})); }}),
+              h('textarea', {style:Object.assign({},inp2,{resize:'none'}), rows:2, placeholder:'📝 Special requests...', value:draft.customer.notes, onChange:function(e){ setDraft(Object.assign({},draft,{customer:Object.assign({},draft.customer,{notes:e.target.value})})); }}),
+              h('div', {style:{fontSize:10,fontWeight:700,color:C.muted,margin:'8px 0 5px',letterSpacing:1.5}}, 'ORDER ITEMS'),
+              draft.items.map(function(item, i) {
+                return h('div', {key:i, style:{display:'flex',alignItems:'center',gap:6,marginBottom:5,background:C.bg,borderRadius:8,padding:'7px 9px'}},
+                  h('div', {style:{flex:1,minWidth:0}},
+                    h('div', {style:{fontSize:12,fontWeight:600,lineHeight:1.3}}, item.name),
+                    h('div', {style:{fontSize:11,color:C.accent}}, '£' + (item.price*item.qty).toFixed(2))
+                  ),
+                  h('div', {style:{display:'flex',alignItems:'center',gap:4,flexShrink:0}},
+                    h('button', {className:'mbtn', onClick:function(){ draftQty(i,-1); }, style:{width:28,height:28,borderRadius:6,border:'1px solid ' + C.border,background:C.card,color:C.text,cursor:'pointer',fontSize:15,fontWeight:700}}, '−'),
+                    h('span', {style:{fontSize:13,fontWeight:700,minWidth:18,textAlign:'center'}}, item.qty),
+                    h('button', {className:'mbtn', onClick:function(){ draftQty(i,1); }, style:{width:28,height:28,borderRadius:6,border:'1px solid ' + C.border,background:C.card,color:C.text,cursor:'pointer',fontSize:15,fontWeight:700}}, '+'),
+                    h('button', {className:'mbtn', onClick:function(){ draftRemove(i); }, style:{width:28,height:28,borderRadius:6,border:'1px solid ' + C.danger + '60',background:'transparent',color:C.danger,cursor:'pointer',fontSize:14,fontWeight:700}}, '×')
+                  )
+                );
+              }),
+              h('div', {style:{marginTop:8}},
+                h('input', {value:itemSearch, onChange:function(e){ setItemSearch(e.target.value); }, placeholder:'+ Search to add item...', style:Object.assign({},inp2,{marginBottom:itemSearch.trim()?4:0})}),
+                searchResults.map(function(item) {
+                  return h('button', {key:item.id, className:'mbtn', onClick:function(){ draftAddItem(item); }, style:{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',padding:'7px 10px',marginBottom:3,borderRadius:7,border:'1px solid ' + C.border,background:C.card,color:C.text,cursor:'pointer',fontSize:12}},
+                    h('span', null, item.name),
+                    h('span', {style:{color:C.accent,fontWeight:700}}, '£' + item.price.toFixed(2))
+                  );
+                })
+              ),
+              h('div', {style:{marginTop:10,padding:10,background:C.bg,borderRadius:8,border:'1px solid ' + C.border}},
+                dDelCharge > 0 && h(React.Fragment, null,
+                  h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,color:C.muted,marginBottom:3}}, h('span',null,'Subtotal'), h('span',null,'£'+dFoodTotal.toFixed(2))),
+                  h('div', {style:{display:'flex',justifyContent:'space-between',fontSize:12,color:C.muted,marginBottom:6}}, h('span',null,'🚗 Delivery ('+draft.deliveryZone+')'), h('span',null,'+£'+dDelCharge.toFixed(2)))
+                ),
+                h('div', {style:{display:'flex',justifyContent:'space-between',fontWeight:800,fontSize:15}}, h('span',null,'TOTAL'), h('span',{style:{color:C.accent}},'£'+Math.max(0,dTotal).toFixed(2)))
+              ),
+              h('div', {style:{display:'flex',gap:8,marginTop:10}},
+                h('button', {className:'mbtn', onClick:saveEdit, style:{flex:1,padding:12,borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, '💾 Save Changes'),
+                h('button', {className:'mbtn', onClick:cancelEdit, style:{flex:1,padding:12,borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:14,cursor:'pointer'}}, 'Cancel')
+              )
+            )
+          );
+        })
+  );
+}
+
 /* ── HISTORY VIEW ── */
 function HistoryView(props) {
   var orders = props.orders;
@@ -1347,10 +1630,35 @@ function HistoryView(props) {
 
   var inp2 = {width:'100%',background:C.bg,border:'1px solid ' + C.accent,borderRadius:8,padding:'8px 10px',color:C.text,fontSize:13,marginBottom:6,outline:'none'};
 
+  /* Group orders by date */
+  var dayGroups = [];
+  var dayMap = {};
+  orders.forEach(function(ord) {
+    var d = ord.date || 'Unknown';
+    if (!dayMap[d]) { dayMap[d] = []; dayGroups.push(d); }
+    dayMap[d].push(ord);
+  });
+
+  function dayLabel(dateStr) {
+    try {
+      var parts = dateStr.split('/');
+      if (parts.length === 3) {
+        var d = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
+        var today = new Date(); today.setHours(0,0,0,0);
+        var yesterday = new Date(today); yesterday.setDate(today.getDate()-1);
+        d.setHours(0,0,0,0);
+        if (d.getTime() === today.getTime()) return 'Today — ' + dateStr;
+        if (d.getTime() === yesterday.getTime()) return 'Yesterday — ' + dateStr;
+        return d.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+      }
+    } catch(e) {}
+    return dateStr;
+  }
+
   return h('div', null,
     h('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}},
       h('div', null,
-        h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, '📋 Order History'),
+        h('h2', {style:{color:C.accent,margin:0,fontSize:18}}, '🕐 Order History'),
         orders.length > 0 && h('div', {style:{fontSize:12,color:C.muted,marginTop:3}},
           orders.length + ' orders · Total: \u00a3' + orders.reduce(function(s,o){ return s+(o.total||0); }, 0).toFixed(2)
         )
@@ -1363,7 +1671,15 @@ function HistoryView(props) {
           h('div', {style:{fontSize:36,marginBottom:10}}, '📭'),
           h('div', {style:{fontWeight:600}}, 'No orders yet')
         )
-      : orders.map(function(ord) {
+      : dayGroups.map(function(dateStr) {
+          var dayOrders = dayMap[dateStr];
+          var dayTotal = dayOrders.reduce(function(s,o){ return s+(o.total||0); }, 0);
+          return h('div', {key:dateStr},
+            h('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',margin:'0 0 10px',padding:'8px 12px',background:C.panel,borderRadius:10,border:'1px solid ' + C.border}},
+              h('div', {style:{fontWeight:800,fontSize:13,color:C.accent}}, '📅 ' + dayLabel(dateStr)),
+              h('div', {style:{fontSize:12,color:C.muted}}, dayOrders.length + ' order' + (dayOrders.length!==1?'s':'') + ' · \u00a3' + dayTotal.toFixed(2))
+            ),
+            dayOrders.map(function(ord) {
         var isEditing = editingId === ord.id;
         var dFoodTotal = isEditing ? draft.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0) : ord.items.reduce(function(s,o){ return s+o.price*o.qty; }, 0);
         var dDelCharge = isEditing
@@ -1485,7 +1801,10 @@ function HistoryView(props) {
             )
           )
         );
-      })
+      }),
+          h('div', {style:{height:4}})
+          );
+        })
   );
 }
 
@@ -1642,11 +1961,16 @@ function App() {
   });
   var orders = ordersState[0]; var setOrders = ordersState[1];
 
-  var orderState = useState([]); var order = orderState[0]; var setOrder = orderState[1];
-  var customerState = useState({name:'',phone:'',address:'',notes:''}); var customer = customerState[0]; var setCustomer = customerState[1];
-  var orderTypeState = useState('delivery'); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
-  var paymentTypeState = useState(null); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
-  var selZoneState = useState(null); var selZone = selZoneState[0]; var setSelZone = selZoneState[1]; /* null or price string e.g. "2.50" */
+  var queueState = useState(function() {
+    try { return JSON.parse(localStorage.getItem('hongs_q') || '[]'); } catch(e) { return []; }
+  });
+  var queue = queueState[0]; var setQueue = queueState[1];
+
+  var orderState = useState(function(){ try{ return JSON.parse(localStorage.getItem('hongs_basket_order')||'[]'); }catch(e){ return []; } }); var order = orderState[0]; var setOrder = orderState[1];
+  var customerState = useState(function(){ try{ return JSON.parse(localStorage.getItem('hongs_basket_customer')||'null')||{name:'',phone:'',address:'',notes:''}; }catch(e){ return {name:'',phone:'',address:'',notes:''}; } }); var customer = customerState[0]; var setCustomer = customerState[1];
+  var orderTypeState = useState(function(){ return localStorage.getItem('hongs_basket_ordertype')||'delivery'; }); var orderType = orderTypeState[0]; var setOrderType = orderTypeState[1];
+  var paymentTypeState = useState(function(){ var v=localStorage.getItem('hongs_basket_payment'); return (v&&v!=='')?v:null; }); var paymentType = paymentTypeState[0]; var setPaymentType = paymentTypeState[1];
+  var selZoneState = useState(function(){ var v=localStorage.getItem('hongs_basket_zone'); return (v&&v!=='')?v:null; }); var selZone = selZoneState[0]; var setSelZone = selZoneState[1]; /* null or price string e.g. "2.50" */
   var isDesktopState = useState(function(){ return window.innerWidth >= 800; }); var isDesktop = isDesktopState[0]; var setIsDesktop = isDesktopState[1];
   var tabState = useState(function(){ return window.innerWidth >= 800 ? 'order' : 'menu'; }); var tab = tabState[0]; var setTab = tabState[1];
   var activeCatState = useState('All'); var activeCat = activeCatState[0]; var setActiveCat = activeCatState[1];
@@ -1658,19 +1982,29 @@ function App() {
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
-  var scheduleTypeState = useState('asap'); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
-  var scheduleTimeState = useState(''); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
+  var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
+  var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
-  var discountState = useState({type:null, pct:10, custom:''}); var discount = discountState[0]; var setDiscount = discountState[1];
+  var discountState = useState(function(){ try{ return JSON.parse(localStorage.getItem('hongs_basket_discount')||'null')||{type:null,pct:10,custom:''}; }catch(e){ return {type:null,pct:10,custom:''}; } }); var discount = discountState[0]; var setDiscount = discountState[1];
   /* priceOverride: null or string — manually typed total that replaces computed grand */
-  var priceOverrideState = useState(''); var priceOverride = priceOverrideState[0]; var setPriceOverride = priceOverrideState[1];
+  var priceOverrideState = useState(function(){ return localStorage.getItem('hongs_basket_override')||''; }); var priceOverride = priceOverrideState[0]; var setPriceOverride = priceOverrideState[1];
   var catRefs = useRef({});
 
   useEffect(function(){ localStorage.setItem('hongs_m5', JSON.stringify(menuItems)); }, [menuItems]);
   useEffect(function(){ localStorage.setItem('hongs_z', JSON.stringify(zones)); }, [zones]);
   useEffect(function(){ localStorage.setItem('hongs_o', JSON.stringify(orders)); }, [orders]);
+  useEffect(function(){ localStorage.setItem('hongs_q', JSON.stringify(queue)); }, [queue]);
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_order', JSON.stringify(order)); }, [order]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_customer', JSON.stringify(customer)); }, [customer]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_ordertype', orderType); }, [orderType]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_payment', paymentType||''); }, [paymentType]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_zone', selZone||''); }, [selZone]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_schtype', scheduleType); }, [scheduleType]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_schtime', scheduleTime); }, [scheduleTime]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_discount', JSON.stringify(discount)); }, [discount]);
+  useEffect(function(){ localStorage.setItem('hongs_basket_override', priceOverride); }, [priceOverride]);
   useEffect(function(){ if (orderType !== 'delivery') setSelZone(null); }, [orderType]);
   useEffect(function() {
     function fn() { setIsDesktop(window.innerWidth >= 800); }
@@ -1761,6 +2095,43 @@ function App() {
     setTimeout(function(){ printReceipt(newOrd, paperSize); }, 150);
   }
 
+  function addToQueue() {
+    if (!order.length) return;
+    var newOrd = {
+      id: Date.now(),
+      customer: {
+        name: (customer.name || '').toUpperCase(),
+        phone: customer.phone || '',
+        address: (customer.address || '').toUpperCase(),
+        notes: customer.notes || ''
+      },
+      items: order.slice(),
+      foodTotal: foodTotal,
+      deliveryCharge: delCharge,
+      discountAmt: discountAmt,
+      deliveryZone: selZone ? '\u00a3' + parseFloat(selZone).toFixed(2) : null,
+      total: grand,
+      orderType: orderType,
+      paymentType: paymentType,
+      scheduleType: scheduleType,
+      scheduleTime: scheduleType === 'scheduled' ? scheduleTime : '',
+      time: new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}),
+      date: new Date().toLocaleDateString('en-GB')
+    };
+    setQueue(function(prev){ return prev.concat([newOrd]); });
+    setOrder([]);
+    setCustomer({name:'',phone:'',address:'',notes:''});
+    setSelZone(null);
+    setPaymentType(null);
+    setScheduleType('asap');
+    setScheduleTime('');
+    setDiscount({type:null, pct:10, custom:''});
+    setPriceOverride('');
+    setShowOk(true);
+    setTimeout(function(){ setShowOk(false); }, 3000);
+    if (isDesktop) { setTab('order'); } else { setTab('queue'); }
+  }
+
   function addItem() {
     if (!newItem.name.trim() || !newItem.price) return;
     var grpVal = newItem.grp ? newItem.grp.trim() : '';
@@ -1807,6 +2178,34 @@ function App() {
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
+  var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
+
+  useEffect(function(){
+    setPrintQueueListener(function(jobs, onDone){
+      setPrintModal({jobs:jobs, idx:0, onDone:onDone});
+    });
+    return function(){ setPrintQueueListener(null); };
+  }, []);
+
+  var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
+    onPrint:function(ord){
+      printReceipt(ord, paperSize);
+      setOrders(function(prev){ return [ord].concat(prev); });
+      setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
+    },
+    onPrintAll:function(){
+      if(!queue.length) return;
+      var snap = queue.slice();
+      enqueuePrintAll(snap, paperSize, function(){
+        setOrders(function(prev){ return snap.slice().reverse().concat(prev); });
+        setQueue([]);
+      });
+    },
+    onClearQueue:function(){
+      if(window.confirm('Clear all ' + queue.length + ' orders from the queue? This cannot be undone.'))
+        setQueue([]);
+    },
+    menuItems:menuItems,setTab:setTab};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu,reorderMenuItem:reorderMenuItem};
   var zoneProps = {zones:zones,newZone:newZone,setNewZone:setNewZone,editZone:editZone,setEditZone:setEditZone,addZone:addZone,delZone:delZone,saveZone:saveZone,smInp:smInp,defZones:DEF_ZONES,setZones:setZones};
   function reorderOrder(fromIdx, toIdx) {
@@ -1821,17 +2220,18 @@ function App() {
 
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
-    var desktopTabs = [['order','🛒 New Order'],['history','📋 History'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['backup','⚙️ Settings & Backup']];
+    var desktopTabs = [['order','🛒 Order'],['queue','📋 Queue'],['history','🕐 History'],['menuEdit','🍽️ Menu Editor'],['zones','🚗 Delivery Zones'],['backup','⚙️ Settings & Backup']];
     return h('div', {style:{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},
       header,
       h('div', {style:{display:'flex',background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0,overflowX:'auto'}},
         desktopTabs.map(function(t) {
-          return h('button', {key:t[0], className:'mbtn', onClick:function(){ setTab(t[0]); }, style:{padding:'13px 22px',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,whiteSpace:'nowrap',background:tab===t[0]?C.bg:'transparent',color:tab===t[0]?C.accent:C.muted,borderBottom:tab===t[0]?'2px solid ' + C.accent:'2px solid transparent',flexShrink:0}},
-            t[1] + (t[0]==='order' && itemCount>0 ? ' (' + itemCount + ')' : '')
+          return h('button', {key:t[0], className:'mbtn', onClick:function(){ setTab(t[0]); }, style:{padding:'13px 22px',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,whiteSpace:'nowrap',background:tab===t[0]?C.bg:'transparent',color:tab===t[0]?C.accent:C.muted,borderBottom:tab===t[0]?'2px solid ' + C.accent:'2px solid transparent',flexShrink:0,position:'relative'}},
+            t[1].replace(/ \(\d+\)$/,'') + (t[0]==='order' && itemCount>0 ? ' (' + itemCount + ')' : ''),
+            t[0]==='queue' && queue.length>0 && h('span', {style:{marginLeft:5,background:'#c03030',color:'#fff',borderRadius:10,fontSize:11,fontWeight:900,padding:'1px 7px',verticalAlign:'middle'}}, queue.length)
           );
         })
       ),
@@ -1840,25 +2240,42 @@ function App() {
         h('div', {style:{flex:1,overflow:'hidden',minWidth:0}}, h(MenuScreen, menuScreenProps)),
         h('div', {style:{width:340,borderLeft:'1px solid ' + C.border,flexShrink:0,display:'flex',flexDirection:'column',minHeight:0}}, h(BasketScreen, basketProps))
       ),
-      (tab==='menuEdit'||tab==='zones'||tab==='history'||tab==='backup') && h('div', {style:{flex:1,overflowY:'auto',padding:20}},
+      (tab==='menuEdit'||tab==='zones'||tab==='history'||tab==='backup'||tab==='queue') && h('div', {style:{flex:1,overflowY:'auto',padding:20}},
         h('div', {style:{maxWidth:760,margin:'0 auto'}},
+          tab==='queue'    && h(QueueView, queueProps),
           tab==='menuEdit' && h(MenuEditor, editorProps),
           tab==='zones'    && h(ZoneEditor, zoneProps),
           tab==='history'  && h(HistoryView, historyProps),
           tab==='backup'   && h(BackupRestore, backupProps)
         )
-      )
+      ),
+      printModal && h(PrintQueueModal, {
+        jobs: printModal.jobs, idx: printModal.idx,
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
+        onNext: function(){
+          var nextIdx = printModal.idx + 1;
+          if (nextIdx >= printModal.jobs.length) {
+            var done = printModal.onDone; setPrintModal(null); if (done) done();
+          } else {
+            setPrintModal(function(m){ return Object.assign({},m,{idx:nextIdx}); });
+          }
+        },
+        onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
+      })
     );
   }
 
   /* ── MOBILE ── */
-  var mobileTabs = [['menu','🍜','Menu'],['basket','🛒','Basket'+(itemCount>0?' ('+itemCount+')':'')],['histm','📋','History'],['settings','⚙️','Editor'],['backupm','💾','Settings']];
+  var mobileTabs = [['menu','🛒','Order'],['basket','📝','Basket'+(itemCount>0?' ('+itemCount+')':'')],['queue','📋','Queue'],['histm','🕐','History'],['settings','⚙️','Editor'],['backupm','💾','Settings']];
   return h('div', {style:{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}},
     /* Tab bar at TOP */
     h('div', {style:{display:'flex',background:C.panel,borderBottom:'1px solid ' + C.border,flexShrink:0}},
       mobileTabs.map(function(t) {
         return h('button', {key:t[0], className:'mbtn', onClick:function(){ setTab(t[0]); }, style:{flex:1,padding:'8px 4px 10px',border:'none',cursor:'pointer',background:tab===t[0]?C.bg:'transparent',borderBottom:'2px solid ' + (tab===t[0]?C.accent:'transparent'),display:'flex',flexDirection:'column',alignItems:'center',gap:2}},
-          h('span', {style:{fontSize:18}}, t[1]),
+          h('div', {style:{position:'relative',display:'inline-flex',alignItems:'center',justifyContent:'center'}},
+            h('span', {style:{fontSize:18}}, t[1]),
+            t[0]==='queue' && queue.length>0 && h('span', {style:{position:'absolute',top:-4,right:-10,background:'#c03030',color:'#fff',borderRadius:10,fontSize:10,fontWeight:900,padding:'0px 5px',lineHeight:'16px'}}, queue.length)
+          ),
           h('span', {style:{fontSize:10,fontWeight:700,color:tab===t[0]?C.accent:C.muted,whiteSpace:'nowrap'}}, t[2])
         );
       })
@@ -1867,7 +2284,8 @@ function App() {
     h('div', {style:{flex:1,overflow:'hidden',minHeight:0,position:'relative'}},
       tab==='menu'    && h(MenuScreen, menuScreenProps),
       tab==='basket'  && h(BasketScreen, basketProps),
-      (tab==='settings'||tab==='histm'||tab==='backupm') && h('div', {style:{position:'absolute',inset:0,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px 14px 30px'}},
+      (tab==='settings'||tab==='histm'||tab==='backupm'||tab==='queue') && h('div', {style:{position:'absolute',inset:0,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px 14px 30px'}},
+        tab==='queue'    && h(QueueView, queueProps),
         tab==='settings' && h(React.Fragment, null,
           h(MenuEditor, editorProps),
           h('div', {style:{height:24}}),
@@ -1876,7 +2294,20 @@ function App() {
         tab==='backupm' && h(BackupRestore, backupProps),
         tab==='histm'   && h(HistoryView, historyProps)
       )
-    )
+    ),
+    printModal && h(PrintQueueModal, {
+      jobs: printModal.jobs, idx: printModal.idx,
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
+      onNext: function(){
+        var nextIdx = printModal.idx + 1;
+        if (nextIdx >= printModal.jobs.length) {
+          var done = printModal.onDone; setPrintModal(null); if (done) done();
+        } else {
+          setPrintModal(function(m){ return Object.assign({},m,{idx:nextIdx}); });
+        }
+      },
+      onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
+    })
   );
 }
 
