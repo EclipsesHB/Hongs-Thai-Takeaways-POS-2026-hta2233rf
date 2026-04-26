@@ -810,6 +810,7 @@ function BasketScreen(props) {
   var grandTotal = props.grandTotal;
   var onSubmit = props.onSubmit;
   var onQueue = props.onQueue;
+  var onClearOrder = props.onClearOrder;
   var paymentType = props.paymentType;
   var setPaymentType = props.setPaymentType;
   var scheduleType = props.scheduleType;
@@ -1063,17 +1064,30 @@ function BasketScreen(props) {
           marginBottom:8
         }
       }, 'PLACE ORDER & PRINT 🖨️'),
-      h('button', {
-        className:'mbtn', onClick:onQueue, disabled:!order.length,
-        style:{
-          width:'100%', padding:'9px 12px', borderRadius:10,
-          border:'1px solid ' + (order.length ? C.border : C.border),
-          background:'transparent',
-          color: order.length ? C.dim : C.muted,
-          fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
-          letterSpacing:0.3
-        }
-      }, '📋 Add to Queue')
+      h('div', {style:{display:'flex', gap:8}},
+        h('button', {
+          className:'mbtn', onClick:onQueue, disabled:!order.length,
+          style:{
+            flex:1, padding:'9px 12px', borderRadius:10,
+            border:'1px solid ' + (order.length ? C.border : C.border),
+            background:'transparent',
+            color: order.length ? C.dim : C.muted,
+            fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
+            letterSpacing:0.3
+          }
+        }, '📋 Add to Queue'),
+        h('button', {
+          className:'mbtn', onClick:onClearOrder, disabled:!order.length,
+          style:{
+            padding:'9px 12px', borderRadius:10,
+            border:'1px solid ' + (order.length ? C.danger+'80' : C.border),
+            background:'transparent',
+            color: order.length ? C.danger : C.muted,
+            fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
+            whiteSpace:'nowrap'
+          }
+        }, '🗑️ Clear')
+      )
     )
   );
 }
@@ -2187,7 +2201,7 @@ function App() {
 
   var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
