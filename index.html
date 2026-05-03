@@ -327,8 +327,8 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  /* 8 blank lines at end of each copy = paper feed so ticket tears cleanly */
-  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
+  /* 5 blank lines at end of each copy = enough gap to tear */
+  blank(); blank(); blank(); blank(); blank();
   return html.join('');
   } /* end buildReceiptHtml */
 
@@ -336,8 +336,6 @@ function printReceipt(ord, paperSize, copies) {
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
     if (ci > 0) {
-      /* Dashed cut line separator between copies */
-      allHtml.push('<div style="text-align:center;border-top:2px dashed #000;margin:0;padding-top:4px;font-size:11px;letter-spacing:2px;">- - - CUT - - -</div>');
     }
     allHtml.push(buildReceiptHtml());
   }
