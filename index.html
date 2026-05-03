@@ -221,7 +221,7 @@ function _doPrintReceipt(ord, paperSize, onDone) {
   var padTop = is58 ? '3mm' : '4mm';
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 30mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 60mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -337,12 +337,20 @@ function _doPrintReceipt(ord, paperSize, onDone) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
+  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
+  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
+  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
 
   document.getElementById('receipt-frame').innerHTML = html.join('');
   setTimeout(function(){
+    if (onDone) {
+      function afterPrint() {
+        window.removeEventListener('afterprint', afterPrint);
+        setTimeout(onDone, 400);
+      }
+      window.addEventListener('afterprint', afterPrint);
+    }
     window.print();
-    if (onDone) setTimeout(onDone, 800);
   }, 80);
 }
 
