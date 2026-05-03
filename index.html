@@ -327,16 +327,14 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  /* 5 blank lines at end of each copy = enough gap to tear */
-  blank(); blank(); blank(); blank(); blank();
+  /* 3 blank lines at end of each copy = enough gap to tear */
+  blank(); blank(); blank();
   return html.join('');
   } /* end buildReceiptHtml */
 
   /* Build all copies in one HTML blob */
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
-    if (ci > 0) {
-    }
     allHtml.push(buildReceiptHtml());
   }
 
@@ -349,8 +347,8 @@ function printReceipt(ord, paperSize, copies) {
 var _printQueue = [];
 var _printQueueListener = null;
 function setPrintQueueListener(fn) { _printQueueListener = fn; }
-function enqueuePrintAll(orders, paperSize, onDone) {
-  _printQueue = orders.map(function(ord){ return {ord:ord, paperSize:paperSize}; });
+function enqueuePrintAll(orders, paperSize, copies, onDone) {
+  _printQueue = orders.map(function(ord){ return {ord:ord, paperSize:paperSize, copies:copies}; });
   if (_printQueueListener) _printQueueListener(_printQueue.slice(), onDone);
 }
 
@@ -1789,7 +1787,7 @@ function HistoryView(props) {
               return h('div', {key:i, style:{display:'flex',alignItems:'center',gap:6,marginBottom:5,background:C.bg,borderRadius:8,padding:'7px 9px'}},
                 h('div', {style:{flex:1,minWidth:0}},
                   h('div', {style:{fontSize:12,fontWeight:600,lineHeight:1.3}}, item.name),
-                  h('div', {style:{fontSize:11,color:C.accent}}, '\u00a3' + (item.price*item.qty).toFixed(2))
+                  h('div', {style:{fontSize:11,color:C.accent}}, '\u00a3' + (item.price*item.qty+(parseFloat(item.extra)||0)).toFixed(2))
                 ),
                 h('div', {style:{display:'flex',alignItems:'center',gap:4,flexShrink:0}},
                   h('button', {className:'mbtn', onClick:function(){ draftQty(i,-1); }, style:{width:28,height:28,borderRadius:6,border:'1px solid ' + C.border,background:C.card,color:C.text,cursor:'pointer',fontSize:15,fontWeight:700}}, '−'),
@@ -1942,7 +1940,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        'Set the number of copies in your printer service app — this setting is for reference only.'
+        'Prints all copies in one job — each copy followed by a short gap to tear.'
       )
     ),
     h('div', {style:card},
@@ -2216,14 +2214,14 @@ function App() {
 
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
-      printReceipt(ord, paperSize);
+      printReceipt(ord, paperSize, copies);
       setOrders(function(prev){ return [ord].concat(prev); });
       setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
     },
     onPrintAll:function(){
       if(!queue.length) return;
       var snap = queue.slice();
-      enqueuePrintAll(snap, paperSize, function(){
+      enqueuePrintAll(snap, paperSize, copies, function(){
         setOrders(function(prev){ return snap.slice().reverse().concat(prev); });
         setQueue([]);
       });
@@ -2278,7 +2276,7 @@ function App() {
       ),
       printModal && h(PrintQueueModal, {
         jobs: printModal.jobs, idx: printModal.idx,
-        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies); },
         onNext: function(){
           var nextIdx = printModal.idx + 1;
           if (nextIdx >= printModal.jobs.length) {
@@ -2324,7 +2322,7 @@ function App() {
     ),
     printModal && h(PrintQueueModal, {
       jobs: printModal.jobs, idx: printModal.idx,
-      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies); },
       onNext: function(){
         var nextIdx = printModal.idx + 1;
         if (nextIdx >= printModal.jobs.length) {
