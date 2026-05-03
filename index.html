@@ -196,22 +196,7 @@ var DEF_ZONES = [
 var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'];
 
 /* ── RECEIPT PRINTER ── */
-function printReceipt(ord, paperSize, copies) {
-  var numCopies = parseInt(copies, 10) || 1;
-  if (numCopies > 1) {
-    /* For USB ESC/POS the service doesn't handle copies — we fire each one sequentially */
-    var fired = 0;
-    function fireNext() {
-      if (fired >= numCopies) return;
-      fired++;
-      _doPrintReceipt(ord, paperSize, fired < numCopies ? fireNext : null);
-    }
-    fireNext();
-    return;
-  }
-  _doPrintReceipt(ord, paperSize, null);
-}
-function _doPrintReceipt(ord, paperSize, onDone) {
+function printReceipt(ord, paperSize) {
   var is58 = paperSize === '58';
   var W = is58 ? 26 : 36;
   var mmSize = is58 ? '58mm' : '80mm';
@@ -221,7 +206,7 @@ function _doPrintReceipt(ord, paperSize, onDone) {
   var padTop = is58 ? '3mm' : '4mm';
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 60mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 8mm;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
@@ -337,21 +322,10 @@ function _doPrintReceipt(ord, paperSize, onDone) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
-  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
-  blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank(); blank();
+  blank(); blank(); blank(); blank(); blank();
 
   document.getElementById('receipt-frame').innerHTML = html.join('');
-  setTimeout(function(){
-    if (onDone) {
-      function afterPrint() {
-        window.removeEventListener('afterprint', afterPrint);
-        setTimeout(onDone, 400);
-      }
-      window.addEventListener('afterprint', afterPrint);
-    }
-    window.print();
-  }, 80);
+  setTimeout(function(){ window.print(); }, 80);
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
@@ -1952,7 +1926,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        'Each copy prints as a separate job — compatible with USB ESC/POS print services.'
+        'Set the number of copies in your printer service app — this setting is for reference only.'
       )
     ),
     h('div', {style:card},
@@ -2129,7 +2103,7 @@ function App() {
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize, copies); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize); }, 150);
   }
 
   function addToQueue() {
@@ -2226,7 +2200,7 @@ function App() {
 
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
-      printReceipt(ord, paperSize, copies);
+      printReceipt(ord, paperSize);
       setOrders(function(prev){ return [ord].concat(prev); });
       setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
     },
@@ -2255,7 +2229,7 @@ function App() {
     });
   }
 
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen};
 
@@ -2288,7 +2262,7 @@ function App() {
       ),
       printModal && h(PrintQueueModal, {
         jobs: printModal.jobs, idx: printModal.idx,
-        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies); },
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
         onNext: function(){
           var nextIdx = printModal.idx + 1;
           if (nextIdx >= printModal.jobs.length) {
@@ -2334,7 +2308,7 @@ function App() {
     ),
     printModal && h(PrintQueueModal, {
       jobs: printModal.jobs, idx: printModal.idx,
-      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies); },
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize); },
       onNext: function(){
         var nextIdx = printModal.idx + 1;
         if (nextIdx >= printModal.jobs.length) {
