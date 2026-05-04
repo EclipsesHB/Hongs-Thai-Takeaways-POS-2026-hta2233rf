@@ -286,7 +286,7 @@ function printReceipt(ord, paperSize, copies) {
   /* Payment before items */
   if (ord.paymentType) {
     div();
-    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
+    html.push('<div style="display:flex;justify-content:space-between;"><span>Payment</span><span>' + (ord.paymentType === 'card' ? 'CARD' : 'CASH') + '</span></div>');
   }
   div();
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
@@ -317,11 +317,11 @@ function printReceipt(ord, paperSize, copies) {
   safeTotal = Math.max(0, safeTotal);
   var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
   if (showSubtotal) {
-    row(line('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
-    if (deliveryAmt > 0) row(line('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
-    if (discountAmt2 > 0) row(line('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
-    div();
+    html.push('<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>\u00a3' + foodTotalAmt.toFixed(2) + '</span></div>');
+    if (deliveryAmt > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Delivery</span><span>\u00a3' + deliveryAmt.toFixed(2) + '</span></div>');
+    if (discountAmt2 > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Discount</span><span>-\u00a3' + discountAmt2.toFixed(2) + '</span></div>');
   }
+  div();
   var totalFontSize = is58 ? '17px' : '19px';
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
