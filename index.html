@@ -207,7 +207,7 @@ function printReceipt(ord, paperSize, copies) {
   var padTop = is58 ? '3mm' : '4mm';
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}#receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:3px 0;display:block;width:100%;}}';
   /* Helper to build one receipt's HTML array */
   function buildReceiptHtml() {
   var HR = '<hr class="rhr"/>';
@@ -339,7 +339,12 @@ function printReceipt(ord, paperSize, copies) {
   }
 
   document.getElementById('receipt-frame').innerHTML = allHtml.join('');
-  setTimeout(function(){ window.print(); }, 80);
+  /* Wait for DOM paint to fully complete before printing.
+     rAF fires after layout; the nested setTimeout then lets the
+     browser actually composite/render images/fonts before print dialog. */
+  requestAnimationFrame(function() {
+    setTimeout(function(){ window.print(); }, 300);
+  });
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
