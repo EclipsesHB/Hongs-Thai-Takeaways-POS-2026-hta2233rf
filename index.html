@@ -210,20 +210,15 @@ function printReceipt(ord, paperSize, copies) {
   styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   /* Helper to build one receipt's HTML array */
   function buildReceiptHtml() {
-  function line(left, right) {
-    var gap = W - left.length - right.length;
-    return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right;
-  }
+  var DASH = is58 ? '-'.repeat(26) : '-'.repeat(36);
   var html = [];
-  function row(txt) { html.push('<div style="white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  function div() { html.push('<div style="border-top:1px dashed #000;margin:3px 0;width:100%;font-size:1px;line-height:1px;">&nbsp;</div>'); }
-  function blank() { html.push('<div style="white-space:pre-wrap;">&nbsp;</div>'); }
-  function crow(txt) { html.push('<div style="text-align:center;white-space:pre-wrap;">' + txt + '</div>'); }
-  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;white-space:pre-wrap;">' + txt + '</div>'); }
-  function rowb(txt) { html.push('<div style="font-weight:bold;white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+  function row(txt) { html.push('<div style="white-space:pre;">' + txt + '</div>'); }
+  function div() { html.push('<div style="white-space:pre;">' + DASH + '</div>'); }
+  function blank() { html.push('<div style="white-space:pre;">&nbsp;</div>'); }
+  function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
+  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
+  function rowb(txt) { html.push('<div style="font-weight:bold;white-space:pre;">' + txt + '</div>'); }
   var addrFs = is58 ? '11px' : '12px';
-  /* --- receipt body --- */
-  html = [];
 
   crow("HONG'S THAI TAKEAWAY");
   crow('01386 423341');
@@ -286,10 +281,10 @@ function printReceipt(ord, paperSize, copies) {
   /* Payment before items */
   if (ord.paymentType) {
     div();
-    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
+    html.push('<div style="display:flex;justify-content:space-between;"><span>Payment</span><span>' + (ord.paymentType === 'card' ? 'CARD' : 'CASH') + '</span></div>');
   }
   div();
-  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
+  html.push('<div style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
   div();
   ord.items.forEach(function(item) {
     var extraAmt = parseFloat(item.extra) || 0;
@@ -315,16 +310,17 @@ function printReceipt(ord, paperSize, copies) {
     safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
   }
   safeTotal = Math.max(0, safeTotal);
+  function frow(left, right) {
+    html.push('<div style="display:flex;justify-content:space-between;"><span>' + left + '</span><span>' + right + '</span></div>');
+  }
   var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
   if (showSubtotal) {
-    row(line('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
-    if (deliveryAmt > 0) row(line('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
-    if (discountAmt2 > 0) row(line('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
-    div();
+    frow('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2));
+    if (deliveryAmt > 0) frow('Delivery', '\u00a3' + deliveryAmt.toFixed(2));
+    if (discountAmt2 > 0) frow('Discount', '-\u00a3' + discountAmt2.toFixed(2));
   }
-  var totalFontSize = is58 ? '17px' : '19px';
-  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
-    '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
+  div();
+  html.push('<div style="display:flex;justify-content:space-between;font-size:' + (is58 ? '17px' : '19px') + ';font-weight:bold;"><span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
   /* 3 blank lines at end of each copy = enough gap to tear */
   blank(); blank(); blank();
