@@ -216,7 +216,7 @@ function printReceipt(ord, paperSize, copies) {
   }
   var html = [];
   function row(txt) { html.push('<div style="white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  function div() { html.push('<div style="border-top:1px dashed #000;margin:3px 0;width:100%;font-size:1px;line-height:1px;">&nbsp;</div>'); }
+  function div() { html.push('<div style="white-space:pre;overflow:hidden;line-height:1.2;">' + '-'.repeat(W) + '</div>'); }
   function blank() { html.push('<div style="white-space:pre-wrap;">&nbsp;</div>'); }
   function crow(txt) { html.push('<div style="text-align:center;white-space:pre-wrap;">' + txt + '</div>'); }
   function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;white-space:pre-wrap;">' + txt + '</div>'); }
@@ -323,10 +323,10 @@ function printReceipt(ord, paperSize, copies) {
   }
   div();
   var totalFontSize = is58 ? '17px' : '19px';
-  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
+  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;padding:2px 0;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  return '<div style="display:block;padding-bottom:20mm;">' + html.join('') + '</div>';
+  return '<div style="display:block;padding-bottom:12mm;">' + html.join('') + '</div>';
   } /* end buildReceiptHtml */
 
   /* Build all copies in one HTML blob */
