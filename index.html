@@ -326,9 +326,7 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   div();
-  /* 3 blank lines at end of each copy = enough gap to tear */
-  blank(); blank(); blank();
-  return html.join('');
+  return '<div style="display:block;padding-bottom:20mm;">' + html.join('') + '</div>';
   } /* end buildReceiptHtml */
 
   /* Build all copies in one HTML blob */
