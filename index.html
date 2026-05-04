@@ -207,21 +207,20 @@ function printReceipt(ord, paperSize, copies) {
   var padTop = is58 ? '3mm' : '4mm';
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}#receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:3px 0;display:block;width:100%;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   /* Helper to build one receipt's HTML array */
   function buildReceiptHtml() {
-  var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
     return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right;
   }
   var html = [];
-  function row(txt) { html.push('<div>' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  function div() { html.push(HR); }
-  function blank() { html.push('<div>&nbsp;</div>'); }
-  function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
-  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
-  function rowb(txt) { html.push('<div style="font-weight:bold;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+  function row(txt) { html.push('<div style="white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+  function div() { html.push('<div style="border-top:1px dashed #000;margin:3px 0;width:100%;font-size:1px;line-height:1px;">&nbsp;</div>'); }
+  function blank() { html.push('<div style="white-space:pre-wrap;">&nbsp;</div>'); }
+  function crow(txt) { html.push('<div style="text-align:center;white-space:pre-wrap;">' + txt + '</div>'); }
+  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;white-space:pre-wrap;">' + txt + '</div>'); }
+  function rowb(txt) { html.push('<div style="font-weight:bold;white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
   var addrFs = is58 ? '11px' : '12px';
   /* --- receipt body --- */
   html = [];
