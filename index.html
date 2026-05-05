@@ -216,16 +216,19 @@ function printReceipt(ord, paperSize, copies, feedLines) {
   if (isNaN(trailingBlankLines)) trailingBlankLines = 4;
 
   var is58 = paperSize === '58';
-  var W = is58 ? 32 : 42;
+  /* Character widths tuned to actual printable area:
+     - NETUM 80mm: ~72mm printable, Courier 13px ≈ 32 chars fits cleanly
+     - 58mm:       ~48mm printable, Courier 12px ≈ 24 chars fits cleanly */
+  var W = is58 ? 24 : 32;
   var mmSize = is58 ? '58mm' : '80mm';
-  var mmWidth = is58 ? '54mm' : '76mm';
-  var fontSize = is58 ? '13px' : '15px';
+  var mmWidth = is58 ? '48mm' : '72mm';
+  var fontSize = is58 ? '12px' : '13px';
   var lineH = is58 ? '1.35' : '1.4';
   var padTop = is58 ? '2mm' : '3mm';
-  var bigTotalFs = is58 ? '17px' : '20px';
-  var bigLetterFs = is58 ? '44px' : '56px';
-  var headerNameFs = is58 ? '15px' : '17px';
-  var addrFs = is58 ? '11px' : '12px';
+  var bigTotalFs = is58 ? '16px' : '18px';
+  var bigLetterFs = is58 ? '40px' : '50px';
+  var headerNameFs = is58 ? '14px' : '16px';
+  var addrFs = is58 ? '10px' : '11px';
 
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
@@ -295,6 +298,19 @@ function printReceipt(ord, paperSize, copies, feedLines) {
     blocks.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
     blocks.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
 
+    /* Order type + scheduled banner come BEFORE the customer info block */
+    var typeText = ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***';
+    var bannerLines = [dashLine(), center(typeText), dashLine()];
+    if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
+      bannerLines.push(center('*** SCHEDULED ***'));
+      bannerLines.push(center(String(ord.scheduleTime).toUpperCase()));
+    } else {
+      bannerLines.push(center('*** ASAP ***'));
+    }
+    bannerLines.push(dashLine());
+    blocks.push('<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>');
+
+    /* Customer info block + big C/D letter */
     var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
     var infoLines = [];
     infoLines.push('Date : ' + (ord.date || ''));
@@ -313,7 +329,7 @@ function printReceipt(ord, paperSize, copies, feedLines) {
         ws.forEach(function(w, j) { infoLines.push((j === 0 ? prefix : '       ') + w); });
       });
     }
-    var bigLetterCellW = is58 ? '40px' : '52px';
+    var bigLetterCellW = is58 ? '36px' : '46px';
     blocks.push(
       '<div style="margin-top:4px;">' +
         '<table style="width:100%;border-collapse:collapse;border:0;">' +
@@ -328,17 +344,8 @@ function printReceipt(ord, paperSize, copies, feedLines) {
         '</table>' +
       '</div>'
     );
-
-    var typeText = ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***';
-    var bannerLines = [dashLine(), center(typeText), dashLine()];
-    if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
-      bannerLines.push(center('*** SCHEDULED ***'));
-      bannerLines.push(center(String(ord.scheduleTime).toUpperCase()));
-    } else {
-      bannerLines.push(center('*** ASAP ***'));
-    }
-    bannerLines.push(dashLine());
-    blocks.push('<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>');
+    /* Separator after customer info block */
+    blocks.push('<pre>' + dashLine() + '\n</pre>');
 
     if (ord.customer.notes && ord.customer.notes.trim()) {
       var noteLines = ['NOTE:'];
@@ -357,14 +364,40 @@ function printReceipt(ord, paperSize, copies, feedLines) {
       var extraAmt = parseFloat(item.extra) || 0;
       var amt = item.price * item.qty + extraAmt;
       var amtStr = '\u00a3' + amt.toFixed(2);
-      var qtyStr = item.qty + 'x ';
-      var available = W - amtStr.length - 1 - qtyStr.length;
-      if (available < 6) available = 6;
-      var nameWrap = wrapText(item.name, '');
-      var firstNameChunk = nameWrap[0] || '';
-      if (firstNameChunk.length > available) firstNameChunk = firstNameChunk.slice(0, available);
-      itemLines.push(lineLR(qtyStr + firstNameChunk, amtStr));
-      for (var i = 1; i < nameWrap.length; i++) itemLines.push('     ' + nameWrap[i]);
+      var qtyStr = item.qty + ' x ';
+      /* First-line name budget: width minus qty prefix, amt suffix, and 1-char gap.
+         Continuation lines have the full width minus a 5-char indent. */
+      var firstWidth = W - qtyStr.length - amtStr.length - 1;
+      if (firstWidth < 6) firstWidth = 6;
+      var contIndent = '     ';
+      var contWidth = W - contIndent.length;
+
+      /* Word-wrap the name into chunks that fit each line's budget */
+      var name = String(item.name || '');
+      var chunks = [];
+      var remaining = name;
+      var firstChunkDone = false;
+      while (remaining.length > 0) {
+        var budget = firstChunkDone ? contWidth : firstWidth;
+        if (remaining.length <= budget) { chunks.push(remaining); break; }
+        /* Try to break at last space within budget */
+        var slice = remaining.slice(0, budget);
+        var breakAt = slice.lastIndexOf(' ');
+        if (breakAt > 0) {
+          chunks.push(remaining.slice(0, breakAt));
+          remaining = remaining.slice(breakAt + 1);
+        } else {
+          /* No space — hard-break at budget */
+          chunks.push(slice);
+          remaining = remaining.slice(budget);
+        }
+        firstChunkDone = true;
+      }
+      if (chunks.length === 0) chunks = [''];
+
+      itemLines.push(lineLR(qtyStr + chunks[0], amtStr));
+      for (var i = 1; i < chunks.length; i++) itemLines.push(contIndent + chunks[i]);
+
       if (extraAmt > 0) itemLines.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
       if (item.comment && item.comment.trim()) {
         item.comment.trim().split('\n').forEach(function(l) {
@@ -2043,17 +2076,17 @@ function BackupRestore(props) {
       )
     ),
     /* Feed lines selector — controls trailing blank lines after the receipt.
-       Different printer + USB print service combinations need different amounts. */
+       Fine-grained 0–10 so you can land exactly on the printer's tear edge. */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f TRAILING FEED LINES'),
-      h('div', {style:{display:'flex',gap:8}},
-        ['0','2','4','6','8'].map(function(n) {
+      h('div', {style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,marginBottom:6}},
+        ['0','1','2','3','4','5'].map(function(n) {
           var active = props.feedLines === n;
           return h('button', {
             key: n, className:'mbtn',
             onClick: function(){ props.setFeedLines(n); },
             style:{
-              flex:1, padding:'10px 8px', borderRadius:9,
+              padding:'10px 0', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
               color: active ? C.accent : C.muted,
@@ -2062,8 +2095,24 @@ function BackupRestore(props) {
           }, n);
         })
       ),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        'Blank lines after the last copy. If the receipt prints blank paper at the end, lower this. If the bottom of the receipt is cut off, raise it.'
+      h('div', {style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6}},
+        ['6','7','8','9','10'].map(function(n) {
+          var active = props.feedLines === n;
+          return h('button', {
+            key: n, className:'mbtn',
+            onClick: function(){ props.setFeedLines(n); },
+            style:{
+              padding:'10px 0', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, n);
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.muted,marginTop:10}},
+        'Blank lines after the receipt. If the bottom is cut off, raise this by 1. If you see extra blank prints at the end, lower it. The right value lands the TOTAL just past the printer\'s tear edge.'
       )
     ),
     h('div', {style:card},
