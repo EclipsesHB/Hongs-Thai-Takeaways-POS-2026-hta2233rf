@@ -436,19 +436,19 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     );
     blocks.push('<pre>' + dashLine() + '\n</pre>');
 
-    /* ── Footer: REAL visible content after the TOTAL.
-       Print services don't strip visible text; this guarantees the TOTAL
-       isn't the last thing rendered, so the printer keeps feeding paper
-       through the footer and past the tear bar.
-       The "TEAR HERE" marker is at the bottom edge of the receipt and
-       physically lands at the tear bar of the printer. */
-    var footerLines = [];
-    footerLines.push('');
-    footerLines.push(center('Thank you for your order!'));
-    footerLines.push('');
-    footerLines.push(center('Please come again'));
-    footerLines.push('');
-    blocks.push('<pre>' + escHtml(footerLines.join('\n')) + '\n</pre>');
+    /* ── Trailing filler: rows containing a single tiny period each.
+       Print services strip pure whitespace but DO render visible characters,
+       so each row of "." forces a paper feed without printing anything
+       meaningful on the paper. The TOTAL stays as the last visible content,
+       and these rows push it physically above the printer's tear bar.
+       The number of rows is controlled by the user's feed setting (mm). */
+    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 5));
+    var fillerText = '';
+    for (var fri = 0; fri < fillerRows; fri++) fillerText += '.\n';
+    /* tiny font + single period per row — visible to print service but barely
+       perceptible on paper. NOT using color:#fff because some print services
+       rasterize the page first; white-on-white would re-classify as blank. */
+    blocks.push('<pre style="font-size:6px;line-height:5mm;">' + fillerText + '</pre>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
@@ -457,29 +457,16 @@ function printReceipt(ord, paperSize, copies, feedMm) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: REAL visible content (sparse periods) so the print
-         service feeds paper between copies. Pure whitespace gets stripped. */
-      allHtml.push('<pre style="margin:0;padding:0;">\u00a0.\n\u00a0.\n\u00a0.\n\u00a0.\n\u00a0.\n</pre>');
+      /* Inter-copy gap: real content (single periods) so print service
+         feeds paper between copies. Whitespace gets stripped, but periods don't.
+         Same color:#fff trick — rendered "white on white" so paper looks blank. */
+      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:5mm;">.\n.\n.\n.\n.\n.\n.\n</pre>');
     }
   }
-  /* Trailing feed: REAL printed content, not whitespace.
-     Each row is a tiny period-character pattern that prints visibly but
-     unobtrusively. Print services WILL feed paper for visible content;
-     they strip whitespace. Number of rows is controlled by user setting,
-     where each row roughly equals 1mm of paper at our font size and line height.
-     For 80mm paper at 13px Courier with line-height 1.4, each line ~5.1mm.
-     So feedMm is converted to lines: Math.ceil(feedMm / 5).
-     The final row contains "TEAR HERE" so the user has an obvious cut line. */
-  if (trailingFeedMm > 0) {
-    var trailLines = Math.max(2, Math.ceil(trailingFeedMm / 5));
-    var trailContent = '';
-    for (var fi = 0; fi < trailLines - 1; fi++) {
-      trailContent += '\u00a0.\n';   /* a single period — visible to print services, near-invisible on paper */
-    }
-    /* Final row: a clear tear marker */
-    trailContent += center('-- TEAR HERE --');
-    allHtml.push('<pre style="margin:0;padding:0;">' + escHtml(trailContent) + '\n</pre>');
-  }
+  /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
+     Each copy ends with its own filler so multi-copy prints don't need a separate
+     trailing block. */
+
 
   var frame = document.getElementById('receipt-frame');
   frame.innerHTML = allHtml.join('');
