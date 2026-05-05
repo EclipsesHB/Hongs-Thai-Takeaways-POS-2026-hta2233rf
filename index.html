@@ -457,10 +457,10 @@ function printReceipt(ord, paperSize, copies, feedMm) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: real content (single periods) so print service
-         feeds paper between copies. Whitespace gets stripped, but periods don't.
-         Same color:#fff trick — rendered "white on white" so paper looks blank. */
-      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:5mm;">.\n.\n.\n.\n.\n.\n.\n</pre>');
+      /* Inter-copy gap: 2 dot rows (~10mm feed). Combined with each copy's own
+         trailing filler (default 15mm), this puts ~25mm of paper between copies —
+         enough to tear cleanly without wasting paper. */
+      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:5mm;">.\n.\n</pre>');
     }
   }
   /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
