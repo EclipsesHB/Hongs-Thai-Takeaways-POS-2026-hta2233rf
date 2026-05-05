@@ -210,10 +210,10 @@ var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','
    - Layout is force-flushed before window.print() to guarantee the print
      service captures the full DOM.
 ─────────────────────────────────────────────────────────────────────────── */
-function printReceipt(ord, paperSize, copies, feedLines) {
+function printReceipt(ord, paperSize, copies, feedMm) {
   var numCopies = parseInt(copies, 10) || 1;
-  var trailingBlankLines = parseInt(feedLines, 10);
-  if (isNaN(trailingBlankLines)) trailingBlankLines = 4;
+  var trailingFeedMm = parseInt(feedMm, 10);
+  if (isNaN(trailingFeedMm)) trailingFeedMm = 15;
 
   var is58 = paperSize === '58';
   /* Character widths tuned to actual printable area:
@@ -443,11 +443,31 @@ function printReceipt(ord, paperSize, copies, feedLines) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      allHtml.push('<pre>\n\n\n\n</pre>');
+      /* Inter-copy gap: nbsp-filled physical-height block so print services
+         actually feed paper between copies (pure newlines get stripped). */
+      allHtml.push(
+        '<div style="height:10mm;min-height:10mm;overflow:hidden;">' +
+          '<pre style="margin:0;padding:0;">\u00a0\n\u00a0\n\u00a0\n\u00a0\n\u00a0\n</pre>' +
+        '</div>'
+      );
     }
   }
-  if (trailingBlankLines > 0) {
-    allHtml.push('<pre>' + '\n'.repeat(trailingBlankLines) + '</pre>');
+  /* Trailing feed: use a physical-height block with non-empty content.
+     Print services strip pure whitespace, so we use \u00a0 (non-breaking
+     space) which can't be classified as blank. The explicit mm height tells
+     the service to feed exactly that much paper, regardless of font/line metrics. */
+  if (trailingFeedMm > 0) {
+    /* Build a vertical stack of nbsp lines tall enough to fill `trailingFeedMm`.
+       Each line is roughly 4mm tall at our font size; we generate enough lines
+       and constrain the wrapper to exact mm height. */
+    var nbspLines = Math.max(8, Math.ceil(trailingFeedMm / 2));
+    var fillerContent = '';
+    for (var fi = 0; fi < nbspLines; fi++) fillerContent += '\u00a0\n';
+    allHtml.push(
+      '<div style="height:' + trailingFeedMm + 'mm;min-height:' + trailingFeedMm + 'mm;overflow:hidden;">' +
+        '<pre style="margin:0;padding:0;">' + fillerContent + '</pre>' +
+      '</div>'
+    );
   }
 
   var frame = document.getElementById('receipt-frame');
@@ -2075,16 +2095,17 @@ function BackupRestore(props) {
         'Prints all copies in one job — each copy is separated by a short blank gap.'
       )
     ),
-    /* Feed lines selector — controls trailing blank lines after the receipt.
-       Fine-grained 0–10 so you can land exactly on the printer's tear edge. */
+    /* Trailing feed in millimetres — physical paper feed past the last line.
+       Uses non-blank filler so print services can't trim it, and an explicit
+       mm-height container so feed length is exact regardless of font metrics. */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f TRAILING FEED LINES'),
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f TRAILING FEED (mm)'),
       h('div', {style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,marginBottom:6}},
-        ['0','1','2','3','4','5'].map(function(n) {
-          var active = props.feedLines === n;
+        ['0','5','10','15','20','25'].map(function(n) {
+          var active = props.feedMm === n;
           return h('button', {
             key: n, className:'mbtn',
-            onClick: function(){ props.setFeedLines(n); },
+            onClick: function(){ props.setFeedMm(n); },
             style:{
               padding:'10px 0', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
@@ -2096,11 +2117,11 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6}},
-        ['6','7','8','9','10'].map(function(n) {
-          var active = props.feedLines === n;
+        ['30','35','40','45','50'].map(function(n) {
+          var active = props.feedMm === n;
           return h('button', {
             key: n, className:'mbtn',
-            onClick: function(){ props.setFeedLines(n); },
+            onClick: function(){ props.setFeedMm(n); },
             style:{
               padding:'10px 0', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
@@ -2112,7 +2133,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:10}},
-        'Blank lines after the receipt. If the bottom is cut off, raise this by 1. If you see extra blank prints at the end, lower it. The right value lands the TOTAL just past the printer\'s tear edge.'
+        'Millimetres of paper to feed past the last line. The NETUM tear bar is ~15-20mm past the print head — start at 15mm and adjust. Filler is invisible (non-breaking spaces) so print services can\'t strip it.'
       )
     ),
     h('div', {style:card},
@@ -2172,7 +2193,7 @@ function App() {
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
-  var feedLinesState = useState(function(){ return localStorage.getItem('hongs_feedlines') || '4'; }); var feedLines = feedLinesState[0]; var setFeedLines = feedLinesState[1];
+  var feedMmState = useState(function(){ return localStorage.getItem('hongs_feedmm') || localStorage.getItem('hongs_feedlines') || '15'; }); var feedMm = feedMmState[0]; var setFeedMm = feedMmState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
@@ -2194,7 +2215,7 @@ function App() {
   useEffect(function(){ localStorage.setItem('hongs_q', JSON.stringify(queue)); }, [queue]);
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
-  useEffect(function(){ localStorage.setItem('hongs_feedlines', feedLines); }, [feedLines]);
+  useEffect(function(){ localStorage.setItem('hongs_feedmm', feedMm); }, [feedMm]);
   useEffect(function(){ localStorage.setItem('hongs_basket_order', JSON.stringify(order)); }, [order]);
   useEffect(function(){ localStorage.setItem('hongs_basket_customer', JSON.stringify(customer)); }, [customer]);
   useEffect(function(){ localStorage.setItem('hongs_basket_ordertype', orderType); }, [orderType]);
@@ -2291,7 +2312,7 @@ function App() {
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedLines); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedMm); }, 150);
   }
 
   function addToQueue() {
@@ -2376,7 +2397,7 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedLines:feedLines,setFeedLines:setFeedLines};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
 
   useEffect(function(){
@@ -2388,7 +2409,7 @@ function App() {
 
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
-      printReceipt(ord, paperSize, copies, feedLines);
+      printReceipt(ord, paperSize, copies, feedMm);
       setOrders(function(prev){ return [ord].concat(prev); });
       setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
     },
@@ -2417,7 +2438,7 @@ function App() {
     });
   }
 
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedLines); },menuItems:menuItems};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedMm); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen};
 
@@ -2450,7 +2471,7 @@ function App() {
       ),
       printModal && h(PrintQueueModal, {
         jobs: printModal.jobs, idx: printModal.idx,
-        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedLines); },
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedMm); },
         onNext: function(){
           var nextIdx = printModal.idx + 1;
           if (nextIdx >= printModal.jobs.length) {
@@ -2496,7 +2517,7 @@ function App() {
     ),
     printModal && h(PrintQueueModal, {
       jobs: printModal.jobs, idx: printModal.idx,
-      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedLines); },
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedMm); },
       onNext: function(){
         var nextIdx = printModal.idx + 1;
         if (nextIdx >= printModal.jobs.length) {
