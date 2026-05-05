@@ -23,6 +23,7 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
   body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}
   body>*{display:none!important;}
   #receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;}
+  #receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:3px 0;display:block;width:100%;}
 }
 </style>
 </head>
@@ -206,20 +207,21 @@ function printReceipt(ord, paperSize, copies) {
   var padTop = is58 ? '3mm' : '4mm';
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
+  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame div{white-space:pre-wrap;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
   /* Helper to build one receipt's HTML array */
   function buildReceiptHtml() {
+  var HR = '<hr class="rhr"/>';
   function line(left, right) {
     var gap = W - left.length - right.length;
     return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right;
   }
   var html = [];
-  function row(txt) { html.push('<div style="white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  function div() { html.push('<div style="padding:3px 0;"><div style="border-top:1px dashed #000;width:100%;font-size:1px;line-height:1px;">&nbsp;</div></div>'); }
-  function blank() { html.push('<div style="white-space:pre-wrap;">&nbsp;</div>'); }
-  function crow(txt) { html.push('<div style="text-align:center;white-space:pre-wrap;">' + txt + '</div>'); }
-  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;white-space:pre-wrap;">' + txt + '</div>'); }
-  function rowb(txt) { html.push('<div style="font-weight:bold;white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+  function row(txt) { html.push('<div>' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
+  function div() { html.push(HR); }
+  function blank() { html.push('<div>&nbsp;</div>'); }
+  function crow(txt) { html.push('<div style="text-align:center;">' + txt + '</div>'); }
+  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;">' + txt + '</div>'); }
+  function rowb(txt) { html.push('<div style="font-weight:bold;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
   var addrFs = is58 ? '11px' : '12px';
   /* --- receipt body --- */
   html = [];
@@ -229,12 +231,11 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
   html.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
   div();
-  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
   div();
   if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
     crowb('*** SCHEDULED ***');
-    crowb(escHtml(ord.scheduleTime).toUpperCase());
+    crowb(ord.scheduleTime.toUpperCase());
     div();
   } else {
     crowb('*** ASAP ***');
@@ -248,16 +249,16 @@ function printReceipt(ord, paperSize, copies) {
   var infoHtml = '';
   infoHtml += infoRow('Date : ' + ord.date);
   infoHtml += infoRow('Time : ' + ord.time);
-  infoHtml += infoRow('Name : ' + escHtml(ord.customer.name || ''));
+  infoHtml += infoRow('Name : ' + (ord.customer.name || ''));
   infoHtml += infoBlank(); infoHtml += infoBlank();
-  infoHtml += infoRow('Tel  : ' + escHtml(ord.customer.phone || ''));
+  infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
   infoHtml += infoBlank(); infoHtml += infoBlank();
   if (ord.orderType === 'delivery') {
     var addrParts = ord.customer.address
       ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
       : [];
     if (addrParts.length > 0) {
-      addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + escHtml(part)); });
+      addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part); });
     } else {
       infoHtml += infoRow('Addr : ');
     }
@@ -273,7 +274,7 @@ function printReceipt(ord, paperSize, copies) {
   if (ord.customer.notes) {
     div();
     row('NOTE:');
-    var words = escHtml(ord.customer.notes).split(' ');
+    var words = ord.customer.notes.split(' ');
     var cur = '';
     words.forEach(function(w) {
       /* break any single word longer than W */
@@ -286,7 +287,7 @@ function printReceipt(ord, paperSize, copies) {
   /* Payment before items */
   if (ord.paymentType) {
     div();
-    html.push('<div style="display:flex;justify-content:space-between;"><span>Payment</span><span>' + (ord.paymentType === 'card' ? 'CARD' : 'CASH') + '</span></div>');
+    row(line('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH'));
   }
   div();
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
@@ -297,12 +298,12 @@ function printReceipt(ord, paperSize, copies) {
     var qtyStr = item.qty + 'x';
     html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
       '<span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span>' +
-      '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + escHtml(item.name) + '</span>' +
+      '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + item.name + '</span>' +
       '<span style="white-space:nowrap;padding-left:6px;">' + amtStr + '</span>' +
       '</div>');
     if (extraAmt > 0) { row('  + Extra: \u00a3' + extraAmt.toFixed(2)); }
     if (item.comment && item.comment.trim()) {
-      item.comment.trim().split('\n').forEach(function(l) { if (l.trim()) rowb('  > ' + escHtml(l.trim())); });
+      item.comment.trim().split('\n').forEach(function(l) { if (l.trim()) rowb('  > ' + l.trim()); });
     }
     blank();
   });
@@ -317,44 +318,28 @@ function printReceipt(ord, paperSize, copies) {
   safeTotal = Math.max(0, safeTotal);
   var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
   if (showSubtotal) {
-    html.push('<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>\u00a3' + foodTotalAmt.toFixed(2) + '</span></div>');
-    if (deliveryAmt > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Delivery</span><span>\u00a3' + deliveryAmt.toFixed(2) + '</span></div>');
-    if (discountAmt2 > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Discount</span><span>-\u00a3' + discountAmt2.toFixed(2) + '</span></div>');
+    row(line('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
+    if (deliveryAmt > 0) row(line('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
+    if (discountAmt2 > 0) row(line('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
+    div();
   }
-  html.push('<div style="height:4px;line-height:4px;font-size:1px;">&nbsp;</div>');
-  div();
-  html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
   var totalFontSize = is58 ? '17px' : '19px';
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
-  html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
   div();
-  return '<div style="display:block;padding-bottom:12mm;">' + html.join('') + '</div>';
+  /* 3 blank lines at end of each copy = enough gap to tear */
+  blank(); blank(); blank();
+  return html.join('');
   } /* end buildReceiptHtml */
 
-  /* Build all copies in one HTML blob, separated by a hard spacer block */
+  /* Build all copies in one HTML blob */
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildReceiptHtml());
-    if (ci < numCopies - 1) {
-      /* page-break-after tells CSS-aware print services to cut here cleanly.
-         The blank spacer rows act as a physical feed gap for drivers that
-         measure content height instead of respecting CSS page breaks. */
-      allHtml.push(
-        '<div style="display:block;width:100%;page-break-after:always;break-after:page;">' +
-          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
-          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
-        '</div>'
-      );
-    }
   }
 
   document.getElementById('receipt-frame').innerHTML = allHtml.join('');
-  /* Extra delay for multi-copy so layout is fully complete before print dialog. */
-  var printDelay = numCopies > 1 ? 800 : 300;
-  requestAnimationFrame(function() {
-    setTimeout(function(){ window.print(); }, printDelay);
-  });
+  setTimeout(function(){ window.print(); }, 80);
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
@@ -1875,7 +1860,7 @@ function BackupRestore(props) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    URL.revokeObjectURL(url);
     showMsg('Backup downloaded!', true);
   }
 
@@ -1955,7 +1940,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        'Prints all copies in one job — each copy is separated by a short blank gap.'
+        'Prints all copies in one job — each copy followed by a short gap to tear.'
       )
     ),
     h('div', {style:card},
