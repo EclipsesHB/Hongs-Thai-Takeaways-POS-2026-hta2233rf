@@ -329,7 +329,7 @@ function printReceipt(ord, paperSize, copies) {
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
   div();
-  return '<div style="display:block;">' + html.join('') + '</div>';
+  return '<div style="display:block;padding-bottom:12mm;">' + html.join('') + '</div>';
   } /* end buildReceiptHtml */
 
   /* Build all copies in one HTML blob, separated by a hard spacer block */
@@ -337,10 +337,13 @@ function printReceipt(ord, paperSize, copies) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildReceiptHtml());
     if (ci < numCopies - 1) {
+      /* page-break-after tells CSS-aware print services to cut here cleanly.
+         The blank spacer rows act as a physical feed gap for drivers that
+         measure content height instead of respecting CSS page breaks. */
       allHtml.push(
-        '<div style="display:block;width:100%;">' +
-          '<div style="height:8mm;line-height:8mm;font-size:1px;">&nbsp;</div>' +
-          '<div style="height:8mm;line-height:8mm;font-size:1px;">&nbsp;</div>' +
+        '<div style="display:block;width:100%;page-break-after:always;break-after:page;">' +
+          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
+          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
         '</div>'
       );
     }
@@ -348,7 +351,7 @@ function printReceipt(ord, paperSize, copies) {
 
   document.getElementById('receipt-frame').innerHTML = allHtml.join('');
   /* Extra delay for multi-copy so layout is fully complete before print dialog. */
-  var printDelay = numCopies > 1 ? 500 : 300;
+  var printDelay = numCopies > 1 ? 800 : 300;
   requestAnimationFrame(function() {
     setTimeout(function(){ window.print(); }, printDelay);
   });
