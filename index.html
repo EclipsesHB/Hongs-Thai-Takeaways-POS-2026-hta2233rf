@@ -23,7 +23,7 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
   body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}
   body>*{display:none!important;}
   #receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;}
-  #receipt-frame .rhr{border:none;border-top:1px dashed #000;margin:3px 0;display:block;width:100%;}
+  #receipt-frame .rhr{border:none;border-top:1px dashed #000;padding:3px 0;display:block;width:100%;}
 }
 </style>
 </head>
@@ -216,7 +216,7 @@ function printReceipt(ord, paperSize, copies) {
   }
   var html = [];
   function row(txt) { html.push('<div style="white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  function div() { html.push('<div style="border-top:1px dashed #000;margin:3px 0;width:100%;font-size:1px;line-height:1px;">&nbsp;</div>'); }
+  function div() { html.push('<div style="padding:3px 0;"><div style="border-top:1px dashed #000;width:100%;font-size:1px;line-height:1px;">&nbsp;</div></div>'); }
   function blank() { html.push('<div style="white-space:pre-wrap;">&nbsp;</div>'); }
   function crow(txt) { html.push('<div style="text-align:center;white-space:pre-wrap;">' + txt + '</div>'); }
   function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;white-space:pre-wrap;">' + txt + '</div>'); }
@@ -321,26 +321,37 @@ function printReceipt(ord, paperSize, copies) {
     if (deliveryAmt > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Delivery</span><span>\u00a3' + deliveryAmt.toFixed(2) + '</span></div>');
     if (discountAmt2 > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Discount</span><span>-\u00a3' + discountAmt2.toFixed(2) + '</span></div>');
   }
+  html.push('<div style="height:4px;line-height:4px;font-size:1px;">&nbsp;</div>');
   div();
+  html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
   var totalFontSize = is58 ? '17px' : '19px';
   html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
+  html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
   div();
-  return '<div style="display:block;padding-bottom:20mm;">' + html.join('') + '</div>';
+  return '<div style="display:block;">' + html.join('') + '</div>';
   } /* end buildReceiptHtml */
 
-  /* Build all copies in one HTML blob */
+  /* Build all copies in one HTML blob, separated by a hard spacer block */
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildReceiptHtml());
+    if (ci < numCopies - 1) {
+      allHtml.push(
+        '<div style="display:block;width:100%;">' +
+          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
+          '<div style="border-top:2px solid #000;width:100%;font-size:1px;line-height:1px;">&nbsp;</div>' +
+          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
+        '</div>'
+      );
+    }
   }
 
   document.getElementById('receipt-frame').innerHTML = allHtml.join('');
-  /* Wait for DOM paint to fully complete before printing.
-     rAF fires after layout; the nested setTimeout then lets the
-     browser actually composite/render images/fonts before print dialog. */
+  /* Extra delay for multi-copy so layout is fully complete before print dialog. */
+  var printDelay = numCopies > 1 ? 500 : 300;
   requestAnimationFrame(function() {
-    setTimeout(function(){ window.print(); }, 300);
+    setTimeout(function(){ window.print(); }, printDelay);
   });
 }
 
