@@ -23,7 +23,6 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
   body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}
   body>*{display:none!important;}
   #receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;}
-  #receipt-frame .rhr{border:none;border-top:1px dashed #000;padding:3px 0;display:block;width:100%;}
 }
 </style>
 </head>
@@ -230,11 +229,12 @@ function printReceipt(ord, paperSize, copies) {
   html.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
   html.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
   div();
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
   div();
   if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
     crowb('*** SCHEDULED ***');
-    crowb(ord.scheduleTime.toUpperCase());
+    crowb(escHtml(ord.scheduleTime).toUpperCase());
     div();
   } else {
     crowb('*** ASAP ***');
@@ -248,16 +248,16 @@ function printReceipt(ord, paperSize, copies) {
   var infoHtml = '';
   infoHtml += infoRow('Date : ' + ord.date);
   infoHtml += infoRow('Time : ' + ord.time);
-  infoHtml += infoRow('Name : ' + (ord.customer.name || ''));
+  infoHtml += infoRow('Name : ' + escHtml(ord.customer.name || ''));
   infoHtml += infoBlank(); infoHtml += infoBlank();
-  infoHtml += infoRow('Tel  : ' + (ord.customer.phone || ''));
+  infoHtml += infoRow('Tel  : ' + escHtml(ord.customer.phone || ''));
   infoHtml += infoBlank(); infoHtml += infoBlank();
   if (ord.orderType === 'delivery') {
     var addrParts = ord.customer.address
       ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
       : [];
     if (addrParts.length > 0) {
-      addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + part); });
+      addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + escHtml(part)); });
     } else {
       infoHtml += infoRow('Addr : ');
     }
@@ -273,7 +273,7 @@ function printReceipt(ord, paperSize, copies) {
   if (ord.customer.notes) {
     div();
     row('NOTE:');
-    var words = ord.customer.notes.split(' ');
+    var words = escHtml(ord.customer.notes).split(' ');
     var cur = '';
     words.forEach(function(w) {
       /* break any single word longer than W */
@@ -297,12 +297,12 @@ function printReceipt(ord, paperSize, copies) {
     var qtyStr = item.qty + 'x';
     html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
       '<span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span>' +
-      '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + item.name + '</span>' +
+      '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + escHtml(item.name) + '</span>' +
       '<span style="white-space:nowrap;padding-left:6px;">' + amtStr + '</span>' +
       '</div>');
     if (extraAmt > 0) { row('  + Extra: \u00a3' + extraAmt.toFixed(2)); }
     if (item.comment && item.comment.trim()) {
-      item.comment.trim().split('\n').forEach(function(l) { if (l.trim()) rowb('  > ' + l.trim()); });
+      item.comment.trim().split('\n').forEach(function(l) { if (l.trim()) rowb('  > ' + escHtml(l.trim())); });
     }
     blank();
   });
@@ -339,9 +339,8 @@ function printReceipt(ord, paperSize, copies) {
     if (ci < numCopies - 1) {
       allHtml.push(
         '<div style="display:block;width:100%;">' +
-          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
-          '<div style="border-top:2px solid #000;width:100%;font-size:1px;line-height:1px;">&nbsp;</div>' +
-          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
+          '<div style="height:8mm;line-height:8mm;font-size:1px;">&nbsp;</div>' +
+          '<div style="height:8mm;line-height:8mm;font-size:1px;">&nbsp;</div>' +
         '</div>'
       );
     }
@@ -1873,7 +1872,7 @@ function BackupRestore(props) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
     showMsg('Backup downloaded!', true);
   }
 
@@ -1953,7 +1952,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        'Prints all copies in one job — each copy followed by a short gap to tear.'
+        'Prints all copies in one job — each copy is separated by a short blank gap.'
       )
     ),
     h('div', {style:card},
