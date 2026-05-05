@@ -206,7 +206,15 @@ function printReceipt(ord, paperSize, copies) {
   var padTop = is58 ? '3mm' : '4mm';
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{@page{size:' + mmSize + ' auto;margin:0;}html{height:auto!important;overflow:visible!important;}body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;}#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}}';
+  styleEl.textContent = '@media print{' +
+    '@page{size:' + mmSize + ' auto;margin:0;}' +
+    'html,body{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;background:#fff!important;}' +
+    'body{position:static!important;width:auto!important;top:auto!important;left:auto!important;}' +
+    '#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;min-height:0!important;max-height:none!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 ' + padTop + ' 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box;}' +
+    '#receipt-frame *{box-sizing:border-box;}' +
+    '#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}' +
+    '#receipt-frame .receipt-copy{page-break-inside:avoid;break-inside:avoid;}' +
+    '}';
   /* Helper to build one receipt's HTML array */
   function buildReceiptHtml() {
   function line(left, right) {
@@ -329,7 +337,7 @@ function printReceipt(ord, paperSize, copies) {
     '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
   html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
   div();
-  return '<div style="display:block;padding-bottom:12mm;">' + html.join('') + '</div>';
+  return '<div class="receipt-copy" style="display:block;">' + html.join('') + '</div>';
   } /* end buildReceiptHtml */
 
   /* Build all copies in one HTML blob, separated by a hard spacer block */
@@ -337,13 +345,13 @@ function printReceipt(ord, paperSize, copies) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildReceiptHtml());
     if (ci < numCopies - 1) {
-      /* page-break-after tells CSS-aware print services to cut here cleanly.
-         The blank spacer rows act as a physical feed gap for drivers that
-         measure content height instead of respecting CSS page breaks. */
+      /* Inter-copy gap: a plain blank spacer block. No page-break-after —
+         that causes some print services (Vidaprinter) to pad each copy out
+         to a full page height and feed blank paper. The gap below is enough
+         physical separation for the user to tear copies apart. */
       allHtml.push(
-        '<div style="display:block;width:100%;page-break-after:always;break-after:page;">' +
-          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
-          '<div style="height:6mm;line-height:6mm;font-size:1px;">&nbsp;</div>' +
+        '<div class="receipt-gap" style="display:block;width:100%;">' +
+          '<div style="height:10mm;line-height:10mm;font-size:1px;">&nbsp;</div>' +
         '</div>'
       );
     }
