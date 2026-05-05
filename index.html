@@ -17,12 +17,13 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
 .mbtn{-webkit-tap-highlight-color:transparent;transition:opacity 0.1s;}
 .mbtn:active{opacity:0.75;}
 #receipt-frame{display:none;}
-/* Print styles injected dynamically by printReceipt() */
+/* Print styles — minimal, deterministic. Full font/width rules are injected
+   dynamically by printReceipt() to match selected paper size. */
 @media print{
-  html{height:auto!important;overflow:visible!important;}
-  body{height:auto!important;overflow:visible!important;position:static!important;width:auto!important;top:auto!important;left:auto!important;}
+  html,body{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;background:#fff!important;}
+  body{position:static!important;}
   body>*{display:none!important;}
-  #receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;}
+  #receipt-frame{display:block!important;position:static!important;overflow:visible!important;}
 }
 </style>
 </head>
@@ -194,175 +195,250 @@ var DEF_ZONES = [
 /* Preset delivery charge options */
 var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'];
 
-/* ── RECEIPT PRINTER ── */
-function printReceipt(ord, paperSize, copies) {
+/* ── RECEIPT PRINTER ────────────────────────────────────────────────────────
+   Built specifically for thermal printers via Android USB print services
+   (Vidaprinter, Looped Labs, etc) on slower hardware (Samsung Tab A 2018).
+
+   Design choices:
+   - <pre> blocks for all monospace text. Print services rasterise <pre> at
+     fixed character pitch — totally predictable, no flex/grid layout.
+   - Text alignment via space padding, not CSS positioning.
+   - Bigger TOTAL line and big C/D letter use simple block layout (table /
+     inline-block), never flex.
+   - Trailing blank lines configurable in Settings (different printer/service
+     combinations need different feed amounts).
+   - Layout is force-flushed before window.print() to guarantee the print
+     service captures the full DOM.
+─────────────────────────────────────────────────────────────────────────── */
+function printReceipt(ord, paperSize, copies, feedLines) {
   var numCopies = parseInt(copies, 10) || 1;
+  var trailingBlankLines = parseInt(feedLines, 10);
+  if (isNaN(trailingBlankLines)) trailingBlankLines = 4;
+
   var is58 = paperSize === '58';
-  var W = is58 ? 26 : 36;
+  var W = is58 ? 32 : 42;
   var mmSize = is58 ? '58mm' : '80mm';
-  var mmWidth = is58 ? '50mm' : '72mm';
-  var fontSize = is58 ? '15px' : '17px';
-  var lineH = is58 ? '1.6' : '1.7';
-  var padTop = is58 ? '3mm' : '4mm';
+  var mmWidth = is58 ? '54mm' : '76mm';
+  var fontSize = is58 ? '13px' : '15px';
+  var lineH = is58 ? '1.35' : '1.4';
+  var padTop = is58 ? '2mm' : '3mm';
+  var bigTotalFs = is58 ? '17px' : '20px';
+  var bigLetterFs = is58 ? '44px' : '56px';
+  var headerNameFs = is58 ? '15px' : '17px';
+  var addrFs = is58 ? '11px' : '12px';
+
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent = '@media print{' +
-    '@page{size:' + mmSize + ' auto;margin:0;}' +
-    'html,body{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;background:#fff!important;}' +
-    'body{position:static!important;width:auto!important;top:auto!important;left:auto!important;}' +
-    '#receipt-frame{display:block!important;position:static!important;overflow:visible!important;height:auto!important;min-height:0!important;max-height:none!important;font-family:"Courier New",Courier,monospace;font-size:' + fontSize + ';line-height:' + lineH + ';font-weight:bold;color:#000;background:#fff;width:' + mmWidth + ';padding:' + padTop + ' 0 ' + padTop + ' 0;margin:0 auto;word-break:normal;overflow-wrap:break-word;-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box;}' +
-    '#receipt-frame *{box-sizing:border-box;}' +
-    '#receipt-frame .rflex{white-space:normal;word-break:normal;overflow-wrap:break-word;}' +
-    '#receipt-frame .receipt-copy{page-break-inside:avoid;break-inside:avoid;}' +
+  styleEl.textContent =
+    '@media print{' +
+      '@page{size:' + mmSize + ' auto;margin:0;}' +
+      '#receipt-frame{' +
+        'font-family:"Courier New",Courier,monospace;' +
+        'font-size:' + fontSize + ';' +
+        'line-height:' + lineH + ';' +
+        'font-weight:bold;' +
+        'color:#000;background:#fff;' +
+        'width:' + mmWidth + ';' +
+        'margin:0 auto;' +
+        'padding:' + padTop + ' 0 0 0;' +
+        '-webkit-print-color-adjust:exact;print-color-adjust:exact;' +
+      '}' +
+      '#receipt-frame pre{' +
+        'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
+        'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
+      '}' +
     '}';
-  /* Helper to build one receipt's HTML array */
-  function buildReceiptHtml() {
-  function line(left, right) {
-    var gap = W - left.length - right.length;
-    return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right;
-  }
-  var html = [];
-  function row(txt) { html.push('<div style="white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  function div() { html.push('<div style="padding:3px 0;"><div style="border-top:1px dashed #000;width:100%;font-size:1px;line-height:1px;">&nbsp;</div></div>'); }
-  function blank() { html.push('<div style="white-space:pre-wrap;">&nbsp;</div>'); }
-  function crow(txt) { html.push('<div style="text-align:center;white-space:pre-wrap;">' + txt + '</div>'); }
-  function crowb(txt) { html.push('<div style="text-align:center;font-weight:bold;white-space:pre-wrap;">' + txt + '</div>'); }
-  function rowb(txt) { html.push('<div style="font-weight:bold;white-space:pre-wrap;">' + txt.replace(/ /g, '&nbsp;') + '</div>'); }
-  var addrFs = is58 ? '11px' : '12px';
-  /* --- receipt body --- */
-  html = [];
 
-  crow("HONG'S THAI TAKEAWAY");
-  crow('01386 423341');
-  html.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
-  html.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
-  div();
-  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  crow(ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
-  div();
-  if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
-    crowb('*** SCHEDULED ***');
-    crowb(escHtml(ord.scheduleTime).toUpperCase());
-    div();
-  } else {
-    crowb('*** ASAP ***');
-    div();
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
-  var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
-  var bigLetterFontSize = is58 ? '42px' : '54px';
-  var bigLetterColW = is58 ? '32px' : '42px';
-  function infoRow(txt) { return '<div style="overflow-wrap:break-word;word-break:normal;">' + txt + '</div>'; }
-  function infoBlank() { return '<div>&nbsp;</div>'; }
-  var infoHtml = '';
-  infoHtml += infoRow('Date : ' + ord.date);
-  infoHtml += infoRow('Time : ' + ord.time);
-  infoHtml += infoRow('Name : ' + escHtml(ord.customer.name || ''));
-  infoHtml += infoBlank(); infoHtml += infoBlank();
-  infoHtml += infoRow('Tel  : ' + escHtml(ord.customer.phone || ''));
-  infoHtml += infoBlank(); infoHtml += infoBlank();
-  if (ord.orderType === 'delivery') {
-    var addrParts = ord.customer.address
-      ? ord.customer.address.split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
-      : [];
-    if (addrParts.length > 0) {
-      addrParts.forEach(function(part, i) { infoHtml += infoRow((i === 0 ? 'Addr : ' : '       ') + escHtml(part)); });
-    } else {
-      infoHtml += infoRow('Addr : ');
-    }
-    infoHtml += infoBlank(); infoHtml += infoBlank();
+  function center(txt) {
+    var t = String(txt);
+    if (t.length >= W) return t;
+    return ' '.repeat(Math.floor((W - t.length) / 2)) + t;
   }
-  html.push(
-    '<div class="rflex" style="display:flex;justify-content:space-between;align-items:center;">' +
-    '<div style="flex:1;min-width:0;">' + infoHtml + '</div>' +
-    '<div style="flex-shrink:0;width:' + bigLetterColW + ';text-align:right;font-size:' + bigLetterFontSize + ';font-weight:900;line-height:1;">' + bigLetter + '</div>' +
-    '</div>'
-  );
-  div();
-  if (ord.customer.notes) {
-    div();
-    row('NOTE:');
-    var words = escHtml(ord.customer.notes).split(' ');
-    var cur = '';
-    words.forEach(function(w) {
-      /* break any single word longer than W */
-      while (w.length > W) { var chunk = w.slice(0, W); w = w.slice(W); rowb(chunk); }
-      if ((cur + (cur?' ':'')+w).length <= W) { cur = (cur?(cur+' '):'')+w; }
-      else { if(cur) rowb(cur); cur = w; }
+  function lineLR(left, right) {
+    var l = String(left), r = String(right);
+    var gap = W - l.length - r.length;
+    if (gap < 1) gap = 1;
+    return l + ' '.repeat(gap) + r;
+  }
+  function dashLine() { return '-'.repeat(W); }
+  function wrapText(txt, indent) {
+    var prefix = indent || '';
+    var lines = [];
+    String(txt == null ? '' : txt).split('\n').forEach(function(rawLine) {
+      var words = rawLine.split(/\s+/).filter(Boolean);
+      if (words.length === 0) { lines.push(''); return; }
+      var cur = prefix;
+      var first = true;
+      words.forEach(function(w) {
+        while (w.length > W - prefix.length) {
+          if (cur.length > prefix.length) { lines.push(cur); cur = prefix; }
+          lines.push(prefix + w.slice(0, W - prefix.length));
+          w = w.slice(W - prefix.length);
+        }
+        var attempt = first ? cur + w : cur + ' ' + w;
+        if (attempt.length <= W) { cur = attempt; first = false; }
+        else { lines.push(cur); cur = prefix + w; first = false; }
+      });
+      if (cur.length > 0) lines.push(cur);
     });
-    if (cur) rowb(cur);
+    return lines;
   }
-  /* Payment before items */
-  if (ord.paymentType) {
-    div();
-    html.push('<div style="display:flex;justify-content:space-between;"><span>Payment</span><span>' + (ord.paymentType === 'card' ? 'CARD' : 'CASH') + '</span></div>');
-  }
-  div();
-  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + (is58 ? '11px' : '12px') + '"><span>QTY&nbsp;&nbsp;ITEM</span><span>AMT</span></div>');
-  div();
-  ord.items.forEach(function(item) {
-    var extraAmt = parseFloat(item.extra) || 0;
-    var amtStr = '\u00a3' + (item.price * item.qty + extraAmt).toFixed(2);
-    var qtyStr = item.qty + 'x';
-    html.push('<div class="rflex" style="display:flex;justify-content:space-between;gap:4px;">' +
-      '<span style="white-space:nowrap;padding-right:6px;">' + qtyStr + '</span>' +
-      '<span style="overflow-wrap:break-word;word-break:normal;flex:1;">' + escHtml(item.name) + '</span>' +
-      '<span style="white-space:nowrap;padding-left:6px;">' + amtStr + '</span>' +
-      '</div>');
-    if (extraAmt > 0) { row('  + Extra: \u00a3' + extraAmt.toFixed(2)); }
-    if (item.comment && item.comment.trim()) {
-      item.comment.trim().split('\n').forEach(function(l) { if (l.trim()) rowb('  > ' + escHtml(l.trim())); });
-    }
-    blank();
-  });
-  div();
-  var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
-  var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
-  var discountAmt2 = parseFloat(ord.discountAmt) || 0;
-  var safeTotal = parseFloat(ord.total);
-  if (isNaN(safeTotal)) {
-    safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
-  }
-  safeTotal = Math.max(0, safeTotal);
-  var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
-  if (showSubtotal) {
-    html.push('<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>\u00a3' + foodTotalAmt.toFixed(2) + '</span></div>');
-    if (deliveryAmt > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Delivery</span><span>\u00a3' + deliveryAmt.toFixed(2) + '</span></div>');
-    if (discountAmt2 > 0) html.push('<div style="display:flex;justify-content:space-between;"><span>Discount</span><span>-\u00a3' + discountAmt2.toFixed(2) + '</span></div>');
-  }
-  html.push('<div style="height:4px;line-height:4px;font-size:1px;">&nbsp;</div>');
-  div();
-  html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
-  var totalFontSize = is58 ? '17px' : '19px';
-  html.push('<div class="rflex" style="display:flex;justify-content:space-between;font-size:' + totalFontSize + ';font-weight:bold;">' +
-    '<span>TOTAL</span><span>\u00a3' + safeTotal.toFixed(2) + '</span></div>');
-  html.push('<div style="height:3px;line-height:3px;font-size:1px;">&nbsp;</div>');
-  div();
-  return '<div class="receipt-copy" style="display:block;">' + html.join('') + '</div>';
-  } /* end buildReceiptHtml */
 
-  /* Build all copies in one HTML blob, separated by a hard spacer block */
+  function buildCopyHtml() {
+    var blocks = [];
+
+    blocks.push('<div style="text-align:center;font-size:' + headerNameFs + ';font-weight:bold;">' + "HONG'S THAI TAKEAWAY" + '</div>');
+    blocks.push('<pre>' + center('01386 423341') + '\n</pre>');
+    blocks.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
+    blocks.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
+
+    var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
+    var infoLines = [];
+    infoLines.push('Date : ' + (ord.date || ''));
+    infoLines.push('Time : ' + (ord.time || ''));
+    infoLines.push('Name : ' + (ord.customer.name || ''));
+    infoLines.push('Tel  : ' + (ord.customer.phone || ''));
+    if (ord.orderType === 'delivery') {
+      var addrParts = ord.customer.address
+        ? String(ord.customer.address).split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
+        : [''];
+      if (addrParts.length === 0) addrParts = [''];
+      addrParts.forEach(function(p, i) {
+        var prefix = i === 0 ? 'Addr : ' : '       ';
+        var ws = wrapText(p, '');
+        if (ws.length === 0) ws = [''];
+        ws.forEach(function(w, j) { infoLines.push((j === 0 ? prefix : '       ') + w); });
+      });
+    }
+    var bigLetterCellW = is58 ? '40px' : '52px';
+    blocks.push(
+      '<div style="margin-top:4px;">' +
+        '<table style="width:100%;border-collapse:collapse;border:0;">' +
+          '<tr>' +
+            '<td style="vertical-align:top;padding:0;">' +
+              '<pre>' + escHtml(infoLines.join('\n')) + '</pre>' +
+            '</td>' +
+            '<td style="vertical-align:top;padding:0;width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
+              bigLetter +
+            '</td>' +
+          '</tr>' +
+        '</table>' +
+      '</div>'
+    );
+
+    var typeText = ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***';
+    var bannerLines = [dashLine(), center(typeText), dashLine()];
+    if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
+      bannerLines.push(center('*** SCHEDULED ***'));
+      bannerLines.push(center(String(ord.scheduleTime).toUpperCase()));
+    } else {
+      bannerLines.push(center('*** ASAP ***'));
+    }
+    bannerLines.push(dashLine());
+    blocks.push('<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>');
+
+    if (ord.customer.notes && ord.customer.notes.trim()) {
+      var noteLines = ['NOTE:'];
+      wrapText(ord.customer.notes, '').forEach(function(l) { noteLines.push(l); });
+      noteLines.push(dashLine());
+      blocks.push('<pre>' + escHtml(noteLines.join('\n')) + '\n</pre>');
+    }
+
+    if (ord.paymentType) {
+      var payText = lineLR('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH');
+      blocks.push('<pre>' + escHtml(payText) + '\n' + dashLine() + '\n</pre>');
+    }
+
+    var itemLines = [lineLR('QTY  ITEM', 'AMT'), dashLine()];
+    ord.items.forEach(function(item) {
+      var extraAmt = parseFloat(item.extra) || 0;
+      var amt = item.price * item.qty + extraAmt;
+      var amtStr = '\u00a3' + amt.toFixed(2);
+      var qtyStr = item.qty + 'x ';
+      var available = W - amtStr.length - 1 - qtyStr.length;
+      if (available < 6) available = 6;
+      var nameWrap = wrapText(item.name, '');
+      var firstNameChunk = nameWrap[0] || '';
+      if (firstNameChunk.length > available) firstNameChunk = firstNameChunk.slice(0, available);
+      itemLines.push(lineLR(qtyStr + firstNameChunk, amtStr));
+      for (var i = 1; i < nameWrap.length; i++) itemLines.push('     ' + nameWrap[i]);
+      if (extraAmt > 0) itemLines.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
+      if (item.comment && item.comment.trim()) {
+        item.comment.trim().split('\n').forEach(function(l) {
+          if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { itemLines.push(w); });
+        });
+      }
+      itemLines.push('');
+    });
+    itemLines.push(dashLine());
+    blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
+
+    var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
+    var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
+    var discountAmt2 = parseFloat(ord.discountAmt) || 0;
+    var safeTotal = parseFloat(ord.total);
+    if (isNaN(safeTotal)) safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
+    safeTotal = Math.max(0, safeTotal);
+    var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
+    if (showSubtotal) {
+      var summaryLines = [];
+      summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
+      if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
+      if (discountAmt2 > 0) summaryLines.push(lineLR('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
+      summaryLines.push('');
+      summaryLines.push(dashLine());
+      blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
+    } else {
+      blocks.push('<pre>' + dashLine() + '\n</pre>');
+    }
+
+    blocks.push(
+      '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
+        '<span style="display:inline-block;width:50%;">TOTAL</span>' +
+        '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
+      '</div>'
+    );
+    blocks.push('<pre>' + dashLine() + '\n</pre>');
+
+    return '<div class="receipt-copy">' + blocks.join('') + '</div>';
+  }
+
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
-    allHtml.push(buildReceiptHtml());
+    allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: a plain blank spacer block. No page-break-after —
-         that causes some print services (Vidaprinter) to pad each copy out
-         to a full page height and feed blank paper. The gap below is enough
-         physical separation for the user to tear copies apart. */
-      allHtml.push(
-        '<div class="receipt-gap" style="display:block;width:100%;">' +
-          '<div style="height:10mm;line-height:10mm;font-size:1px;">&nbsp;</div>' +
-        '</div>'
-      );
+      allHtml.push('<pre>\n\n\n\n</pre>');
     }
   }
+  if (trailingBlankLines > 0) {
+    allHtml.push('<pre>' + '\n'.repeat(trailingBlankLines) + '</pre>');
+  }
 
-  document.getElementById('receipt-frame').innerHTML = allHtml.join('');
-  /* Extra delay for multi-copy so layout is fully complete before print dialog. */
-  var printDelay = numCopies > 1 ? 800 : 300;
-  requestAnimationFrame(function() {
-    setTimeout(function(){ window.print(); }, printDelay);
-  });
+  var frame = document.getElementById('receipt-frame');
+  frame.innerHTML = allHtml.join('');
+
+  /* Force synchronous layout — critical to prevent print-time truncation */
+  var _h = frame.offsetHeight; void _h;
+  var _h2 = frame.scrollHeight; void _h2;
+
+  function firePrint() {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          try { window.print(); } catch(e) { console.error('print failed', e); }
+        }, 200);
+      });
+    });
+  }
+
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(firePrint, firePrint);
+  } else {
+    setTimeout(firePrint, 100);
+  }
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
@@ -1966,6 +2042,30 @@ function BackupRestore(props) {
         'Prints all copies in one job — each copy is separated by a short blank gap.'
       )
     ),
+    /* Feed lines selector — controls trailing blank lines after the receipt.
+       Different printer + USB print service combinations need different amounts. */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f TRAILING FEED LINES'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['0','2','4','6','8'].map(function(n) {
+          var active = props.feedLines === n;
+          return h('button', {
+            key: n, className:'mbtn',
+            onClick: function(){ props.setFeedLines(n); },
+            style:{
+              flex:1, padding:'10px 8px', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, n);
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
+        'Blank lines after the last copy. If the receipt prints blank paper at the end, lower this. If the bottom of the receipt is cut off, raise it.'
+      )
+    ),
     h('div', {style:card},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
       h('button', {className:'mbtn', onClick:doExport, style:{width:'100%',padding:'11px 18px',borderRadius:9,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:C.accent,color:C.bg}}, 'Download Backup File'),
@@ -2023,6 +2123,7 @@ function App() {
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
+  var feedLinesState = useState(function(){ return localStorage.getItem('hongs_feedlines') || '4'; }); var feedLines = feedLinesState[0]; var setFeedLines = feedLinesState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
@@ -2044,6 +2145,7 @@ function App() {
   useEffect(function(){ localStorage.setItem('hongs_q', JSON.stringify(queue)); }, [queue]);
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
+  useEffect(function(){ localStorage.setItem('hongs_feedlines', feedLines); }, [feedLines]);
   useEffect(function(){ localStorage.setItem('hongs_basket_order', JSON.stringify(order)); }, [order]);
   useEffect(function(){ localStorage.setItem('hongs_basket_customer', JSON.stringify(customer)); }, [customer]);
   useEffect(function(){ localStorage.setItem('hongs_basket_ordertype', orderType); }, [orderType]);
@@ -2140,7 +2242,7 @@ function App() {
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize, copies); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedLines); }, 150);
   }
 
   function addToQueue() {
@@ -2225,7 +2327,7 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedLines:feedLines,setFeedLines:setFeedLines};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
 
   useEffect(function(){
@@ -2237,7 +2339,7 @@ function App() {
 
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
-      printReceipt(ord, paperSize, copies);
+      printReceipt(ord, paperSize, copies, feedLines);
       setOrders(function(prev){ return [ord].concat(prev); });
       setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
     },
@@ -2266,7 +2368,7 @@ function App() {
     });
   }
 
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies); },menuItems:menuItems};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedLines); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen};
 
@@ -2299,7 +2401,7 @@ function App() {
       ),
       printModal && h(PrintQueueModal, {
         jobs: printModal.jobs, idx: printModal.idx,
-        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies); },
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedLines); },
         onNext: function(){
           var nextIdx = printModal.idx + 1;
           if (nextIdx >= printModal.jobs.length) {
@@ -2345,7 +2447,7 @@ function App() {
     ),
     printModal && h(PrintQueueModal, {
       jobs: printModal.jobs, idx: printModal.idx,
-      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies); },
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedLines); },
       onNext: function(){
         var nextIdx = printModal.idx + 1;
         if (nextIdx >= printModal.jobs.length) {
