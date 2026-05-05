@@ -436,6 +436,20 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     );
     blocks.push('<pre>' + dashLine() + '\n</pre>');
 
+    /* ── Footer: REAL visible content after the TOTAL.
+       Print services don't strip visible text; this guarantees the TOTAL
+       isn't the last thing rendered, so the printer keeps feeding paper
+       through the footer and past the tear bar.
+       The "TEAR HERE" marker is at the bottom edge of the receipt and
+       physically lands at the tear bar of the printer. */
+    var footerLines = [];
+    footerLines.push('');
+    footerLines.push(center('Thank you for your order!'));
+    footerLines.push('');
+    footerLines.push(center('Please come again'));
+    footerLines.push('');
+    blocks.push('<pre>' + escHtml(footerLines.join('\n')) + '\n</pre>');
+
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
 
@@ -443,31 +457,28 @@ function printReceipt(ord, paperSize, copies, feedMm) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: nbsp-filled physical-height block so print services
-         actually feed paper between copies (pure newlines get stripped). */
-      allHtml.push(
-        '<div style="height:10mm;min-height:10mm;overflow:hidden;">' +
-          '<pre style="margin:0;padding:0;">\u00a0\n\u00a0\n\u00a0\n\u00a0\n\u00a0\n</pre>' +
-        '</div>'
-      );
+      /* Inter-copy gap: REAL visible content (sparse periods) so the print
+         service feeds paper between copies. Pure whitespace gets stripped. */
+      allHtml.push('<pre style="margin:0;padding:0;">\u00a0.\n\u00a0.\n\u00a0.\n\u00a0.\n\u00a0.\n</pre>');
     }
   }
-  /* Trailing feed: use a physical-height block with non-empty content.
-     Print services strip pure whitespace, so we use \u00a0 (non-breaking
-     space) which can't be classified as blank. The explicit mm height tells
-     the service to feed exactly that much paper, regardless of font/line metrics. */
+  /* Trailing feed: REAL printed content, not whitespace.
+     Each row is a tiny period-character pattern that prints visibly but
+     unobtrusively. Print services WILL feed paper for visible content;
+     they strip whitespace. Number of rows is controlled by user setting,
+     where each row roughly equals 1mm of paper at our font size and line height.
+     For 80mm paper at 13px Courier with line-height 1.4, each line ~5.1mm.
+     So feedMm is converted to lines: Math.ceil(feedMm / 5).
+     The final row contains "TEAR HERE" so the user has an obvious cut line. */
   if (trailingFeedMm > 0) {
-    /* Build a vertical stack of nbsp lines tall enough to fill `trailingFeedMm`.
-       Each line is roughly 4mm tall at our font size; we generate enough lines
-       and constrain the wrapper to exact mm height. */
-    var nbspLines = Math.max(8, Math.ceil(trailingFeedMm / 2));
-    var fillerContent = '';
-    for (var fi = 0; fi < nbspLines; fi++) fillerContent += '\u00a0\n';
-    allHtml.push(
-      '<div style="height:' + trailingFeedMm + 'mm;min-height:' + trailingFeedMm + 'mm;overflow:hidden;">' +
-        '<pre style="margin:0;padding:0;">' + fillerContent + '</pre>' +
-      '</div>'
-    );
+    var trailLines = Math.max(2, Math.ceil(trailingFeedMm / 5));
+    var trailContent = '';
+    for (var fi = 0; fi < trailLines - 1; fi++) {
+      trailContent += '\u00a0.\n';   /* a single period — visible to print services, near-invisible on paper */
+    }
+    /* Final row: a clear tear marker */
+    trailContent += center('-- TEAR HERE --');
+    allHtml.push('<pre style="margin:0;padding:0;">' + escHtml(trailContent) + '\n</pre>');
   }
 
   var frame = document.getElementById('receipt-frame');
