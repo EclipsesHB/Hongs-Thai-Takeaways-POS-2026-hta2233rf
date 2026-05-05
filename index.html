@@ -213,7 +213,7 @@ var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','
 function printReceipt(ord, paperSize, copies, feedMm) {
   var numCopies = parseInt(copies, 10) || 1;
   var trailingFeedMm = parseInt(feedMm, 10);
-  if (isNaN(trailingFeedMm)) trailingFeedMm = 15;
+  if (isNaN(trailingFeedMm)) trailingFeedMm = 20;
 
   var is58 = paperSize === '58';
   /* Character widths tuned to actual printable area:
@@ -436,19 +436,20 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     );
     blocks.push('<pre>' + dashLine() + '\n</pre>');
 
-    /* ── Trailing filler: rows containing a single tiny period each.
-       Print services strip pure whitespace but DO render visible characters,
-       so each row of "." forces a paper feed without printing anything
-       meaningful on the paper. The TOTAL stays as the last visible content,
-       and these rows push it physically above the printer's tear bar.
+    /* ── Trailing filler: rows of tiny visible characters that vary slightly.
+       Print services strip pure whitespace AND can sometimes optimize away
+       repeating "decorative" patterns at the end of long documents. By varying
+       the character per row, this content is treated as substantive document
+       content the service must render in full.
+       Each row at 6px font + 6mm line-height = ~6mm of paper feed.
        The number of rows is controlled by the user's feed setting (mm). */
-    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 5));
+    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 6));
+    var fillerChars = ['.', ',', '.', '\u00b7', '.', ',', '.', '\u00b7', '.', ','];
     var fillerText = '';
-    for (var fri = 0; fri < fillerRows; fri++) fillerText += '.\n';
-    /* tiny font + single period per row — visible to print service but barely
-       perceptible on paper. NOT using color:#fff because some print services
-       rasterize the page first; white-on-white would re-classify as blank. */
-    blocks.push('<pre style="font-size:6px;line-height:5mm;">' + fillerText + '</pre>');
+    for (var fri = 0; fri < fillerRows; fri++) {
+      fillerText += fillerChars[fri % fillerChars.length] + '\n';
+    }
+    blocks.push('<pre style="font-size:6px;line-height:6mm;">' + fillerText + '</pre>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
@@ -457,10 +458,10 @@ function printReceipt(ord, paperSize, copies, feedMm) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: 2 dot rows (~10mm feed). Combined with each copy's own
-         trailing filler (default 15mm), this puts ~25mm of paper between copies —
-         enough to tear cleanly without wasting paper. */
-      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:5mm;">.\n.\n</pre>');
+      /* Inter-copy gap: 2 rows of tiny varied characters (~12mm feed).
+         Combined with each copy's own trailing filler (default 20mm),
+         this puts ~32mm of paper between copies — enough to tear cleanly. */
+      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:6mm;">.\n,\n</pre>');
     }
   }
   /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
@@ -2191,7 +2192,7 @@ function App() {
   var editZoneState = useState(null); var editZone = editZoneState[0]; var setEditZone = editZoneState[1];
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
-  var feedMmState = useState(function(){ return localStorage.getItem('hongs_feedmm') || localStorage.getItem('hongs_feedlines') || '15'; }); var feedMm = feedMmState[0]; var setFeedMm = feedMmState[1];
+  var feedMmState = useState(function(){ return localStorage.getItem('hongs_feedmm') || '20'; }); var feedMm = feedMmState[0]; var setFeedMm = feedMmState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
