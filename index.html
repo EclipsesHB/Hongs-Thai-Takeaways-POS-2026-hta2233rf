@@ -267,6 +267,12 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     return l + ' '.repeat(gap) + r;
   }
   function dashLine() { return '-'.repeat(W); }
+  /* Wider dash count tuned to fill the actual print width (80mm:35, 58mm:25)
+     so dividers visually reach the edge of the paper, matching the full-width
+     TOTAL line's span. Only used for section dividers — lineLR/center still
+     use W so their text alignment stays correct. */
+  var Wdash = is58 ? 25 : 35;
+  function dashLineWide() { return '-'.repeat(Wdash); }
   function wrapText(txt, indent) {
     var prefix = indent || '';
     var lines = [];
@@ -300,23 +306,29 @@ function printReceipt(ord, paperSize, copies, feedMm) {
 
     /* Order type + scheduled banner come BEFORE the customer info block */
     var typeText = ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***';
-    var bannerLines = [dashLine(), center(typeText), dashLine()];
+    var bannerLines = [dashLineWide(), center(typeText), dashLineWide()];
     if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
       bannerLines.push(center('*** SCHEDULED ***'));
       bannerLines.push(center(String(ord.scheduleTime).toUpperCase()));
     } else {
       bannerLines.push(center('*** ASAP ***'));
     }
-    bannerLines.push(dashLine());
+    bannerLines.push(dashLineWide());
     blocks.push('<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>');
 
     /* Customer info block + big C/D letter */
     var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
     var infoLines = [];
+    /* Customer info — each entry followed by a blank line so the user can
+       write the missing field by hand if it wasn't entered in the system. */
     infoLines.push('Date : ' + (ord.date || ''));
+    infoLines.push('');
     infoLines.push('Time : ' + (ord.time || ''));
+    infoLines.push('');
     infoLines.push('Name : ' + (ord.customer.name || ''));
+    infoLines.push('');
     infoLines.push('Tel  : ' + (ord.customer.phone || ''));
+    infoLines.push('');
     if (ord.orderType === 'delivery') {
       var addrParts = ord.customer.address
         ? String(ord.customer.address).split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
@@ -328,6 +340,7 @@ function printReceipt(ord, paperSize, copies, feedMm) {
         if (ws.length === 0) ws = [''];
         ws.forEach(function(w, j) { infoLines.push((j === 0 ? prefix : '       ') + w); });
       });
+      infoLines.push('');
     }
     var bigLetterCellW = is58 ? '36px' : '46px';
     blocks.push(
@@ -345,18 +358,18 @@ function printReceipt(ord, paperSize, copies, feedMm) {
       '</div>'
     );
     /* Separator after customer info block */
-    blocks.push('<pre>' + dashLine() + '\n</pre>');
+    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
     if (ord.customer.notes && ord.customer.notes.trim()) {
       var noteLines = ['NOTE:'];
       wrapText(ord.customer.notes, '').forEach(function(l) { noteLines.push(l); });
-      noteLines.push(dashLine());
+      noteLines.push(dashLineWide());
       blocks.push('<pre>' + escHtml(noteLines.join('\n')) + '\n</pre>');
     }
 
     if (ord.paymentType) {
       var payText = lineLR('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH');
-      blocks.push('<pre>' + escHtml(payText) + '\n' + dashLine() + '\n</pre>');
+      blocks.push('<pre>' + escHtml(payText) + '\n' + dashLineWide() + '\n</pre>');
     }
 
     var itemLines = [lineLR('QTY  ITEM', 'AMT'), dashLine()];
@@ -406,7 +419,7 @@ function printReceipt(ord, paperSize, copies, feedMm) {
       }
       itemLines.push('');
     });
-    itemLines.push(dashLine());
+    itemLines.push(dashLineWide());
     blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
@@ -417,15 +430,18 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     safeTotal = Math.max(0, safeTotal);
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
     if (showSubtotal) {
+      /* Symmetric padding: blank line above and below the Subtotal/Delivery/Discount
+         block so the dividers feel evenly spaced around the text. */
       var summaryLines = [];
+      summaryLines.push('');
       summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
       if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
       if (discountAmt2 > 0) summaryLines.push(lineLR('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
       summaryLines.push('');
-      summaryLines.push(dashLine());
+      summaryLines.push(dashLineWide());
       blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
     } else {
-      blocks.push('<pre>' + dashLine() + '\n</pre>');
+      blocks.push('<pre>' + dashLineWide() + '\n</pre>');
     }
 
     blocks.push(
@@ -434,7 +450,7 @@ function printReceipt(ord, paperSize, copies, feedMm) {
         '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
       '</div>'
     );
-    blocks.push('<pre>' + dashLine() + '\n</pre>');
+    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
     /* ── Trailing filler: rows of tiny visible characters that vary slightly.
        Print services strip pure whitespace AND can sometimes optimize away
@@ -458,10 +474,10 @@ function printReceipt(ord, paperSize, copies, feedMm) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: 2 rows of tiny varied characters (~12mm feed).
-         Combined with each copy's own trailing filler (default 20mm),
-         this puts ~32mm of paper between copies — enough to tear cleanly. */
-      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:6mm;">.\n,\n</pre>');
+      /* Inter-copy gap: 1 row of tiny char (~6mm feed). Combined with each
+         copy's own trailing filler (default 20mm), this puts ~26mm between
+         copies — about 1 finger of tearable space without wasting paper. */
+      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:6mm;">.\n</pre>');
     }
   }
   /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
