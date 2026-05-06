@@ -227,17 +227,24 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   var W, mmWidth, fontSize, lineH, padTop, bigTotalFs, bigLetterFs, headerNameFs, addrFs, Wdash;
   var mmSize = is58 ? '58mm' : '80mm';
   if (isBT) {
-    /* Bluetooth: bigger fonts, full paper width, more characters per line */
-    W          = is58 ? 26 : 36;
-    mmWidth    = is58 ? '54mm' : '78mm';
-    fontSize   = is58 ? '14px' : '16px';
-    lineH      = is58 ? '1.3'  : '1.35';
+    /* Bluetooth: significantly bigger fonts. The bluetooth print service
+       rasterizes at a fixed virtual DPI then scales to paper, which shrinks
+       output by ~25-30%. We compensate with proportionally larger fonts.
+       Char-counts are reduced from USB profile to keep content within the
+       printable area at the larger font sizes:
+       - 80mm: 28 chars at 18px Courier ≈ 75mm content in 80mm paper
+       -        = ~2.5mm margin each side, comfortably centered.
+       - 58mm: 22 chars at 16px Courier ≈ 53mm content in 58mm paper. */
+    W          = is58 ? 22 : 28;
+    mmWidth    = is58 ? '53mm' : '75mm';
+    fontSize   = is58 ? '16px' : '18px';
+    lineH      = is58 ? '1.35' : '1.4';
     padTop     = is58 ? '2mm'  : '3mm';
-    bigTotalFs = is58 ? '18px' : '22px';
-    bigLetterFs= is58 ? '46px' : '60px';
-    headerNameFs= is58? '16px' : '20px';
-    addrFs     = is58 ? '11px' : '13px';
-    Wdash      = is58 ? 26     : 36;
+    bigTotalFs = is58 ? '20px' : '24px';
+    bigLetterFs= is58 ? '54px' : '72px';
+    headerNameFs= is58? '18px' : '22px';
+    addrFs     = is58 ? '12px' : '14px';
+    Wdash      = is58 ? 22     : 28;
   } else {
     /* USB: original tuned values */
     W          = is58 ? 24 : 32;
@@ -257,6 +264,10 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   styleEl.textContent =
     '@media print{' +
       '@page{size:' + mmSize + ' auto;margin:0;}' +
+      /* Belt-and-braces centering: text-align:center on body forces inline-block
+         children to center even if margin:0 auto is ignored by the print service.
+         display:inline-block on the frame makes it eligible for that centering. */
+      'html,body{text-align:center!important;}' +
       '#receipt-frame{' +
         'font-family:"Courier New",Courier,monospace;' +
         'font-size:' + fontSize + ';' +
@@ -265,6 +276,8 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'color:#000;background:#fff;' +
         'width:' + mmWidth + ';' +
         'margin:0 auto;' +
+        'display:inline-block;' +
+        'text-align:left;' +     /* reset inner content to left-align (pre blocks etc) */
         'padding:' + padTop + ' 0 0 0;' +
         '-webkit-print-color-adjust:exact;print-color-adjust:exact;' +
       '}' +
