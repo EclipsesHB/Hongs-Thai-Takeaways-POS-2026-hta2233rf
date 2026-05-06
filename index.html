@@ -372,7 +372,7 @@ function printReceipt(ord, paperSize, copies, feedMm) {
       blocks.push('<pre>' + escHtml(payText) + '\n' + dashLineWide() + '\n</pre>');
     }
 
-    var itemLines = [lineLR('QTY  ITEM', 'AMT'), dashLine()];
+    var itemLines = [lineLR('QTY  ITEM', 'AMT'), dashLineWide()];
     ord.items.forEach(function(item) {
       var extraAmt = parseFloat(item.extra) || 0;
       var amt = item.price * item.qty + extraAmt;
@@ -430,9 +430,12 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     safeTotal = Math.max(0, safeTotal);
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
     if (showSubtotal) {
-      /* Symmetric padding: blank line above and below the Subtotal/Delivery/Discount
-         block so the dividers feel evenly spaced around the text. */
+      /* Padding around the Subtotal/Delivery/Discount block. Two blank lines
+         above (since the divider above sits in a separate <pre> block, browsers
+         render inter-block space tighter than intra-block \n), one blank below.
+         Net effect: visually even spacing on both sides of the text. */
       var summaryLines = [];
+      summaryLines.push('');
       summaryLines.push('');
       summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
       if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
@@ -474,10 +477,13 @@ function printReceipt(ord, paperSize, copies, feedMm) {
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
     if (ci < numCopies - 1) {
-      /* Inter-copy gap: 1 row of tiny char (~6mm feed). Combined with each
-         copy's own trailing filler (default 20mm), this puts ~26mm between
-         copies — about 1 finger of tearable space without wasting paper. */
-      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:6mm;">.\n</pre>');
+      /* Inter-copy gap + page-break:
+         The page-break-before tag tells the print service to treat each copy as
+         a distinct page. This gives the printer's hardware buffer a chance to
+         fully drain between copies, preventing the buffer-overflow overprinting
+         we were seeing on copy 3 of large orders. The dot row provides a small
+         additional physical gap and prevents the service from trimming the break. */
+      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
     }
   }
   /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
