@@ -674,7 +674,9 @@ function MenuScreen(props) {
     var catItems = getCatItems(cat);
     if (!catItems.length) return null;
     var groups = buildGroups(catItems);
-    var cols = isDesktop ? 5 : 2;
+    /* maxCols is the max tiles per row (desktop:6, mobile:2). Sections with
+       fewer items will use that exact count instead, making tiles naturally wider. */
+    var maxCols = isDesktop ? 6 : 2;
 
     /* Tile renderer — used for both solo items and items inside a group.
        useGroupLabel=true strips the group prefix from the name (e.g.
@@ -713,7 +715,14 @@ function MenuScreen(props) {
       if (soloBuffer.length === 0) return;
       var items = soloBuffer.slice();
       soloBuffer = [];
-      renderedBlocks.push(h('div', {key:'sb'+(blockKey++), style:{display:'grid', gridTemplateColumns:'repeat('+cols+',1fr)', gap:6, marginBottom:10}},
+      /* Adaptive column count: 1 solo gets 1 wide tile, 2 solos get 2 medium
+         tiles, etc, capped at maxCols. gridAutoRows:1fr forces equal heights
+         within this batch. Subtle top border separates from preceding block. */
+      var soloCols = Math.min(items.length, maxCols);
+      var isFirst = renderedBlocks.length === 0;
+      var wrapStyle = {display:'grid', gridTemplateColumns:'repeat('+soloCols+',1fr)', gridAutoRows:'1fr', gap:6, marginBottom:10};
+      if (!isFirst) { wrapStyle.paddingTop = 8; wrapStyle.borderTop = '1px solid ' + C.border; }
+      renderedBlocks.push(h('div', {key:'sb'+(blockKey++), style:wrapStyle},
         items.map(function(it){ return renderTile(it, false); })
       ));
     }
@@ -722,10 +731,15 @@ function MenuScreen(props) {
         soloBuffer.push(sec.items[0]);
       } else {
         flushSolos();
-        var grpCols = Math.min(sec.items.length, cols);
-        renderedBlocks.push(h('div', {key:'gb'+(blockKey++), style:{marginBottom:10}},
+        /* Group sections: tiles fit on one row up to maxCols (6 desktop / 2 mobile);
+           uniform row heights via gridAutoRows; subtle top separator between sections. */
+        var grpCols = Math.min(sec.items.length, maxCols);
+        var isFirstGrp = renderedBlocks.length === 0;
+        var grpStyle = {marginBottom:10};
+        if (!isFirstGrp) { grpStyle.paddingTop = 8; grpStyle.borderTop = '1px solid ' + C.border; }
+        renderedBlocks.push(h('div', {key:'gb'+(blockKey++), style:grpStyle},
           h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
-          h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gap:6}},
+          h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gridAutoRows:'1fr', gap:6}},
             sec.items.map(function(it){ return renderTile(it, true); })
           )
         ));
