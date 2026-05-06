@@ -685,14 +685,20 @@ function MenuScreen(props) {
     /* Tile renderer — used for both solo items and items inside a group.
        useGroupLabel=true strips the group prefix from the name (e.g.
        "Phad Thai — Beef" -> "Beef") since the group label is shown above. */
-    function renderTile(item, useGroupLabel) {
+    /* renderTile takes the section size so it can use a shorter min-height
+       for small sections (≤2 items) — those sections are visually distinct
+       and don't need to vertically align with the larger 5/6-tile sections. */
+    function renderTile(item, useGroupLabel, sectionSize) {
       var inOrder = order.find(function(o){ return o.id === item.id; });
       var label = useGroupLabel ? (item.name.split(' — ')[1] || item.name) : item.name;
+      var compact = sectionSize <= 2;
+      var tileMinH = compact ? 90 : 130;
+      var tilePad = compact ? '8px 8px' : '10px 8px';
       return h('div', {key: item.id, style:{position:'relative'}},
         h('button', {
           className:'mbtn',
           onClick: function(){ onAdd(item); },
-          style:{width:'100%', minHeight:130, background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'flex', flexDirection:'column'}
+          style:{width:'100%', minHeight:tileMinH, background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:tilePad, cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'flex', flexDirection:'column'}
         },
           h('div', {style:{display:'inline-block',background:C.numBadge,color:C.numBadgeText,fontWeight:900,fontSize:15,lineHeight:1,padding:'3px 8px',borderRadius:6,marginBottom:5,letterSpacing:0.5,minWidth:28,textAlign:'center'}}, item.num === '—' ? '—' : item.num),
           h('div', {style:{fontWeight:700,fontSize:13,lineHeight:1.3,marginBottom:5}}, label),
@@ -727,7 +733,7 @@ function MenuScreen(props) {
       var wrapStyle = {display:'grid', gridTemplateColumns:'repeat('+soloCols+',1fr)', gap:6, marginBottom:10};
       if (!isFirst) { wrapStyle.paddingTop = 8; wrapStyle.borderTop = '1px solid ' + C.border; }
       renderedBlocks.push(h('div', {key:'sb'+(blockKey++), style:wrapStyle},
-        items.map(function(it){ return renderTile(it, false); })
+        items.map(function(it){ return renderTile(it, false, items.length); })
       ));
     }
     groups.forEach(function(sec) {
@@ -744,7 +750,7 @@ function MenuScreen(props) {
         renderedBlocks.push(h('div', {key:'gb'+(blockKey++), style:grpStyle},
           h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
           h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gap:6}},
-            sec.items.map(function(it){ return renderTile(it, true); })
+            sec.items.map(function(it){ return renderTile(it, true, sec.items.length); })
           )
         ));
       }
@@ -764,56 +770,72 @@ function MenuScreen(props) {
     );
   });
 
-  /* Single row: 🔍 icon + pills (or search input when open) */
-  /* Search-icon button is fixed width; remaining space is filled by an
-     auto-fit grid of category pills so they're all the same width and align
-     into clean rows. minmax(110px,1fr) means each pill is at least 110px
-     wide, and all pills in a row share equal width. */
-  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding: isDesktop ? '6px 10px' : '5px 8px', display:'flex', alignItems:'center', gap:5}},
-    /* Search icon toggle button */
+  /* Pill-shape style shared by the search icon, All button, and category pills,
+     so they look uniform in size and alignment. */
+  function pillStyle(active) {
+    return {
+      padding: isDesktop ? '9px 8px' : '5px 6px',
+      borderRadius:7,
+      border:'1px solid ' + (active ? C.accent : C.border),
+      background: active ? C.accent : 'transparent',
+      color: active ? C.bg : C.muted,
+      fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer',
+      whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+      textAlign:'center', height: isDesktop ? 36 : 28,
+      display:'flex', alignItems:'center', justifyContent:'center'
+    };
+  }
+  /* Combined cell with search icon + All button — they share one pill-width
+     in the grid (each takes half), so the search icon stops eating extra
+     horizontal space and All is half its previous width. */
+  var searchAllCell = h('div', {style:{display:'flex', gap:4}},
     h('button', {
       className:'mbtn',
       onClick: function(){
         if (searchOpen) { setSearch(''); setActiveCat('All'); }
         setSearchOpen(!searchOpen);
       },
-      style:{flexShrink:0, width: isDesktop ? 38 : 30, height: isDesktop ? 36 : 28, borderRadius:7, border:'1px solid ' + (searchOpen ? C.accent : C.border), background: searchOpen ? C.accentBg : 'transparent', color: searchOpen ? C.accent : C.muted, cursor:'pointer', fontSize: isDesktop ? 16 : 13, display:'flex', alignItems:'center', justifyContent:'center'}
+      style: Object.assign({}, pillStyle(searchOpen), {flex:1, minWidth:0, fontSize: isDesktop ? 16 : 13})
     }, '🔍'),
-    /* When search open: expand input across row */
+    h('button', {
+      className:'mbtn',
+      onClick: function(){ setActiveCat('All'); document.getElementById('mscroll').scrollTop = 0; },
+      style: Object.assign({}, pillStyle(activeCat === 'All'), {flex:1, minWidth:0})
+    }, 'All')
+  );
+  /* The whole bar is one auto-fit grid; the search+All combo is the first
+     cell, then each category pill is its own cell. minmax(110px, 1fr)
+     means pills auto-size to fill rows evenly. */
+  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding: isDesktop ? '6px 10px' : '5px 8px'}},
     searchOpen
-      ? h('input', {
-          value: search,
-          autoFocus: true,
-          onChange: function(e){ setSearch(e.target.value); setActiveCat('All'); },
-          onKeyDown: function(e){ if(e.key==='Escape'){ setSearch(''); setActiveCat('All'); setSearchOpen(false); } },
-          placeholder: 'Search menu...',
-          style:{flex:1, minWidth:100, background:C.bg, border:'1px solid ' + C.accent, borderRadius:7, padding:'5px 10px', color:C.text, fontSize:13, outline:'none'}
-        })
-      /* When closed: category pills wrapped in an auto-fit grid so they
-         line up in even rows with consistent pill widths. */
-      : h('div', {style:{flex:1, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(' + (isDesktop ? '110px' : '80px') + ', 1fr))', gap:5}},
-        ['All'].concat(CATS).map(function(cat) {
-          var active = cat === 'All' ? activeCat === 'All' : cat === activeCat;
-          return h('button', {
-            key: cat,
-            className: 'mbtn',
-            onClick: function() {
-              if (cat === 'All') { setActiveCat('All'); document.getElementById('mscroll').scrollTop = 0; }
-              else scrollTo(cat);
-            },
-            style:{
-              padding: isDesktop ? '9px 8px' : '5px 6px',
-              borderRadius:7,
-              border:'1px solid ' + (active ? C.accent : C.border),
-              background: active ? C.accent : 'transparent',
-              color: active ? C.bg : C.muted,
-              fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer',
-              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
-              textAlign:'center'
-            }
-          }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
-        })
-      )
+      ? /* When search open: search icon stays, input expands across row */
+        h('div', {style:{display:'flex', alignItems:'center', gap:5}},
+          h('button', {
+            className:'mbtn',
+            onClick: function(){ setSearch(''); setActiveCat('All'); setSearchOpen(false); },
+            style: Object.assign({}, pillStyle(true), {flexShrink:0, width: isDesktop ? 38 : 30, fontSize: isDesktop ? 16 : 13})
+          }, '🔍'),
+          h('input', {
+            value: search, autoFocus: true,
+            onChange: function(e){ setSearch(e.target.value); setActiveCat('All'); },
+            onKeyDown: function(e){ if(e.key==='Escape'){ setSearch(''); setActiveCat('All'); setSearchOpen(false); } },
+            placeholder: 'Search menu...',
+            style:{flex:1, minWidth:100, background:C.bg, border:'1px solid ' + C.accent, borderRadius:7, padding:'5px 10px', color:C.text, fontSize:13, outline:'none'}
+          })
+        )
+      : /* When closed: search+All cell + one cell per category, all in an
+           auto-fit grid so pills are evenly sized and rows are clean. */
+        h('div', {style:{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(' + (isDesktop ? '110px' : '80px') + ', 1fr))', gap:5}},
+          [searchAllCell].concat(CATS.map(function(cat) {
+            var active = cat === activeCat;
+            return h('button', {
+              key: cat,
+              className: 'mbtn',
+              onClick: function(){ scrollTo(cat); },
+              style: pillStyle(active)
+            }, ICONS[cat] + ' ' + cat);
+          }))
+        )
   );
 
   return h('div', {style:{display:'flex',flexDirection:'column',height:'100%',minHeight:0}},
