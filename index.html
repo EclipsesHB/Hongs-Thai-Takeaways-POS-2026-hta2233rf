@@ -674,9 +674,13 @@ function MenuScreen(props) {
     var catItems = getCatItems(cat);
     if (!catItems.length) return null;
     var groups = buildGroups(catItems);
-    /* maxCols is the max tiles per row (desktop:6, mobile:2). Sections with
-       fewer items will use that exact count instead, making tiles naturally wider. */
-    var maxCols = isDesktop ? 6 : 2;
+    /* maxCols is the max tiles per row. Most categories use 6 (desktop) so
+       a 6-variant group like Pad Khing (Duck/Prawn/Chicken/Pork/Beef/Veg) fits
+       on one line. Categories with shorter labels and many small items
+       (Starters, Rice & Sides, Misc) use 5 since 6 makes tiles too narrow.
+       Mobile uses 2 across the board. */
+    var fiveColCats = {'Starters':1, 'Rice & Sides':1, 'Misc':1};
+    var maxCols = isDesktop ? (fiveColCats[cat] ? 5 : 6) : 2;
 
     /* Tile renderer — used for both solo items and items inside a group.
        useGroupLabel=true strips the group prefix from the name (e.g.
@@ -688,7 +692,7 @@ function MenuScreen(props) {
         h('button', {
           className:'mbtn',
           onClick: function(){ onAdd(item); },
-          style:{width:'100%', minHeight:104, background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'flex', flexDirection:'column'}
+          style:{width:'100%', minHeight:130, background:inOrder?C.selected:C.card, border:'2px solid '+(inOrder?C.accent:C.border), borderRadius:10, padding:'10px 8px', cursor:'pointer', textAlign:'left', color:C.text, boxShadow:inOrder?'0 0 0 1px '+C.accent+'40':'none', display:'flex', flexDirection:'column'}
         },
           h('div', {style:{display:'inline-block',background:C.numBadge,color:C.numBadgeText,fontWeight:900,fontSize:15,lineHeight:1,padding:'3px 8px',borderRadius:6,marginBottom:5,letterSpacing:0.5,minWidth:28,textAlign:'center'}}, item.num === '—' ? '—' : item.num),
           h('div', {style:{fontWeight:700,fontSize:13,lineHeight:1.3,marginBottom:5}}, label),
@@ -720,7 +724,7 @@ function MenuScreen(props) {
          within this batch. Subtle top border separates from preceding block. */
       var soloCols = Math.min(items.length, maxCols);
       var isFirst = renderedBlocks.length === 0;
-      var wrapStyle = {display:'grid', gridTemplateColumns:'repeat('+soloCols+',1fr)', gridAutoRows:'1fr', gap:6, marginBottom:10};
+      var wrapStyle = {display:'grid', gridTemplateColumns:'repeat('+soloCols+',1fr)', gap:6, marginBottom:10};
       if (!isFirst) { wrapStyle.paddingTop = 8; wrapStyle.borderTop = '1px solid ' + C.border; }
       renderedBlocks.push(h('div', {key:'sb'+(blockKey++), style:wrapStyle},
         items.map(function(it){ return renderTile(it, false); })
@@ -739,7 +743,7 @@ function MenuScreen(props) {
         if (!isFirstGrp) { grpStyle.paddingTop = 8; grpStyle.borderTop = '1px solid ' + C.border; }
         renderedBlocks.push(h('div', {key:'gb'+(blockKey++), style:grpStyle},
           h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
-          h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gridAutoRows:'1fr', gap:6}},
+          h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gap:6}},
             sec.items.map(function(it){ return renderTile(it, true); })
           )
         ));
@@ -761,7 +765,11 @@ function MenuScreen(props) {
   });
 
   /* Single row: 🔍 icon + pills (or search input when open) */
-  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding: isDesktop ? '6px 10px' : '5px 8px', display:'flex', alignItems:'center', gap:5, flexWrap:'wrap'}},
+  /* Search-icon button is fixed width; remaining space is filled by an
+     auto-fit grid of category pills so they're all the same width and align
+     into clean rows. minmax(110px,1fr) means each pill is at least 110px
+     wide, and all pills in a row share equal width. */
+  var searchBar = h('div', {style:{background:C.panel, borderBottom:'1px solid ' + C.border, flexShrink:0, padding: isDesktop ? '6px 10px' : '5px 8px', display:'flex', alignItems:'center', gap:5}},
     /* Search icon toggle button */
     h('button', {
       className:'mbtn',
@@ -781,8 +789,10 @@ function MenuScreen(props) {
           placeholder: 'Search menu...',
           style:{flex:1, minWidth:100, background:C.bg, border:'1px solid ' + C.accent, borderRadius:7, padding:'5px 10px', color:C.text, fontSize:13, outline:'none'}
         })
-      /* When closed: show category pills inline */
-      : ['All'].concat(CATS).map(function(cat) {
+      /* When closed: category pills wrapped in an auto-fit grid so they
+         line up in even rows with consistent pill widths. */
+      : h('div', {style:{flex:1, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(' + (isDesktop ? '110px' : '80px') + ', 1fr))', gap:5}},
+        ['All'].concat(CATS).map(function(cat) {
           var active = cat === 'All' ? activeCat === 'All' : cat === activeCat;
           return h('button', {
             key: cat,
@@ -792,15 +802,18 @@ function MenuScreen(props) {
               else scrollTo(cat);
             },
             style:{
-              padding: isDesktop ? '9px 16px' : '5px 9px',
+              padding: isDesktop ? '9px 8px' : '5px 6px',
               borderRadius:7,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accent : 'transparent',
               color: active ? C.bg : C.muted,
-              fontSize: isDesktop ? 14 : 11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap'
+              fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer',
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+              textAlign:'center'
             }
           }, cat === 'All' ? 'All' : ICONS[cat] + ' ' + cat);
         })
+      )
   );
 
   return h('div', {style:{display:'flex',flexDirection:'column',height:'100%',minHeight:0}},
