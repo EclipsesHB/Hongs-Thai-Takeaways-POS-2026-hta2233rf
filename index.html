@@ -474,13 +474,17 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       blocks.push('<pre>' + dashLineWide() + '\n</pre>');
     }
 
-    /* TOTAL line: rendered as a <pre> using the same lineLR() monospace
-       alignment as Subtotal/Delivery above. This guarantees the price column
-       lines up perfectly with the prices above, regardless of print mode. */
+    /* TOTAL line: block element with bigger font.
+       Uses inline-block 50/50 split which is guaranteed to fit within the
+       frame width regardless of font size. Trade-off: the price won't perfectly
+       column-align with the £ amounts above (it sits flush against the right
+       edge of the frame) — but this prevents the overflow/cut-off that occurs
+       when a bigger-font monospace line tries to fit into the frame width. */
     blocks.push(
-      '<pre style="font-size:' + bigTotalFs + ';font-weight:bold;margin:0;padding:0;">' +
-        escHtml(lineLR('TOTAL', '\u00a3' + safeTotal.toFixed(2))) +
-      '\n</pre>'
+      '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
+        '<span style="display:inline-block;width:50%;">TOTAL</span>' +
+        '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
+      '</div>'
     );
     blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
