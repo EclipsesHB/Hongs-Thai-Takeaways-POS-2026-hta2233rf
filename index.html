@@ -264,10 +264,10 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   styleEl.textContent =
     '@media print{' +
       '@page{size:' + mmSize + ' auto;margin:0;}' +
-      /* Belt-and-braces centering: text-align:center on body forces inline-block
-         children to center even if margin:0 auto is ignored by the print service.
-         display:inline-block on the frame makes it eligible for that centering. */
-      'html,body{text-align:center!important;}' +
+      /* Plain block layout. The previous inline-block + text-align:center
+         centering trick caused the frame to shrink-wrap to its content,
+         ignoring the declared width and breaking layout. margin:0 auto on
+         a block element with explicit width is the simple, correct centering. */
       '#receipt-frame{' +
         'font-family:"Courier New",Courier,monospace;' +
         'font-size:' + fontSize + ';' +
@@ -276,9 +276,8 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'color:#000;background:#fff;' +
         'width:' + mmWidth + ';' +
         'margin:0 auto;' +
-        'display:inline-block;' +
-        'text-align:left;' +     /* reset inner content to left-align (pre blocks etc) */
         'padding:' + padTop + ' 0 0 0;' +
+        'box-sizing:border-box;' +
         '-webkit-print-color-adjust:exact;print-color-adjust:exact;' +
       '}' +
       '#receipt-frame pre{' +
