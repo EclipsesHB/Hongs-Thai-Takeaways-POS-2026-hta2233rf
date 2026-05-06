@@ -462,28 +462,26 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     safeTotal = Math.max(0, safeTotal);
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
     if (showSubtotal) {
-      /* Padding around the Subtotal/Delivery/Discount block. Two blank lines
-         above (since the divider above sits in a separate <pre> block, browsers
-         render inter-block space tighter than intra-block \n), one blank below.
-         Net effect: visually even spacing on both sides of the text. */
+      /* Subtotal/Delivery/Discount sits flush between dividers — no padding.
+         Avoids asymmetric-spacing pitfalls when blank-line padding interacts
+         with cross-block render gaps differently on USB vs Bluetooth services. */
       var summaryLines = [];
-      summaryLines.push('');
-      summaryLines.push('');
       summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
       if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
       if (discountAmt2 > 0) summaryLines.push(lineLR('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
-      summaryLines.push('');
       summaryLines.push(dashLineWide());
       blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
     } else {
       blocks.push('<pre>' + dashLineWide() + '\n</pre>');
     }
 
+    /* TOTAL line: rendered as a <pre> using the same lineLR() monospace
+       alignment as Subtotal/Delivery above. This guarantees the price column
+       lines up perfectly with the prices above, regardless of print mode. */
     blocks.push(
-      '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
-        '<span style="display:inline-block;width:50%;">TOTAL</span>' +
-        '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
-      '</div>'
+      '<pre style="font-size:' + bigTotalFs + ';font-weight:bold;margin:0;padding:0;">' +
+        escHtml(lineLR('TOTAL', '\u00a3' + safeTotal.toFixed(2))) +
+      '\n</pre>'
     );
     blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
@@ -592,9 +590,27 @@ function MenuScreen(props) {
   var isDesktop = props.isDesktop;
 
   var filtered = useMemo(function() {
-    if (!search.trim()) return menuItems;
+    /* Sort items by num ascending (numeric), with non-numeric/missing num
+       falling to the end in their original array order. The POS picker uses
+       numeric ordering as the canonical sort — manual reorder lives on the
+       Menu management screen, not here. */
+    function sortByNum(arr) {
+      var withNum = [], withoutNum = [];
+      arr.forEach(function(i, idx) {
+        var n = parseInt(i.num, 10);
+        if (!isNaN(n)) withNum.push({i: i, n: n, idx: idx});
+        else withoutNum.push({i: i, idx: idx});
+      });
+      withNum.sort(function(a, b) {
+        if (a.n !== b.n) return a.n - b.n;
+        return a.idx - b.idx;
+      });
+      withoutNum.sort(function(a, b) { return a.idx - b.idx; });
+      return withNum.concat(withoutNum).map(function(x){ return x.i; });
+    }
+    if (!search.trim()) return sortByNum(menuItems);
     var q = search.toLowerCase();
-    return menuItems.filter(function(i){ return i.name.toLowerCase().indexOf(q) !== -1; });
+    return sortByNum(menuItems.filter(function(i){ return i.name.toLowerCase().indexOf(q) !== -1; }));
   }, [menuItems, search]);
 
   var searchOpenState = useState(false);
