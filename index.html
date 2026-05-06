@@ -210,25 +210,47 @@ var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','
    - Layout is force-flushed before window.print() to guarantee the print
      service captures the full DOM.
 ─────────────────────────────────────────────────────────────────────────── */
-function printReceipt(ord, paperSize, copies, feedMm) {
+function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   var numCopies = parseInt(copies, 10) || 1;
   var trailingFeedMm = parseInt(feedMm, 10);
   if (isNaN(trailingFeedMm)) trailingFeedMm = 20;
 
   var is58 = paperSize === '58';
-  /* Character widths tuned to actual printable area:
-     - NETUM 80mm: ~72mm printable, Courier 13px ≈ 32 chars fits cleanly
-     - 58mm:       ~48mm printable, Courier 12px ≈ 24 chars fits cleanly */
-  var W = is58 ? 24 : 32;
+  /* Two render profiles that differ in width/font sizing:
+     - USB: tuned for Looped Labs USB which renders at native printer DPI,
+            uses 72mm width on 80mm paper (fits printable area exactly).
+     - BT:  tuned for Looped Labs Bluetooth which rasterizes at fixed virtual
+            DPI then scales to paper. Uses full paper width and bigger fonts
+            to compensate for the bluetooth service's tendency to shrink
+            output, so the printed receipt fills the paper edge-to-edge. */
+  var isBT = printMode === 'bluetooth';
+  var W, mmWidth, fontSize, lineH, padTop, bigTotalFs, bigLetterFs, headerNameFs, addrFs, Wdash;
   var mmSize = is58 ? '58mm' : '80mm';
-  var mmWidth = is58 ? '48mm' : '72mm';
-  var fontSize = is58 ? '12px' : '13px';
-  var lineH = is58 ? '1.35' : '1.4';
-  var padTop = is58 ? '2mm' : '3mm';
-  var bigTotalFs = is58 ? '16px' : '18px';
-  var bigLetterFs = is58 ? '40px' : '50px';
-  var headerNameFs = is58 ? '14px' : '16px';
-  var addrFs = is58 ? '10px' : '11px';
+  if (isBT) {
+    /* Bluetooth: bigger fonts, full paper width, more characters per line */
+    W          = is58 ? 26 : 36;
+    mmWidth    = is58 ? '54mm' : '78mm';
+    fontSize   = is58 ? '14px' : '16px';
+    lineH      = is58 ? '1.3'  : '1.35';
+    padTop     = is58 ? '2mm'  : '3mm';
+    bigTotalFs = is58 ? '18px' : '22px';
+    bigLetterFs= is58 ? '46px' : '60px';
+    headerNameFs= is58? '16px' : '20px';
+    addrFs     = is58 ? '11px' : '13px';
+    Wdash      = is58 ? 26     : 36;
+  } else {
+    /* USB: original tuned values */
+    W          = is58 ? 24 : 32;
+    mmWidth    = is58 ? '48mm' : '72mm';
+    fontSize   = is58 ? '12px' : '13px';
+    lineH      = is58 ? '1.35' : '1.4';
+    padTop     = is58 ? '2mm'  : '3mm';
+    bigTotalFs = is58 ? '16px' : '18px';
+    bigLetterFs= is58 ? '40px' : '50px';
+    headerNameFs= is58? '14px' : '16px';
+    addrFs     = is58 ? '10px' : '11px';
+    Wdash      = is58 ? 25     : 35;
+  }
 
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
@@ -267,11 +289,8 @@ function printReceipt(ord, paperSize, copies, feedMm) {
     return l + ' '.repeat(gap) + r;
   }
   function dashLine() { return '-'.repeat(W); }
-  /* Wider dash count tuned to fill the actual print width (80mm:35, 58mm:25)
-     so dividers visually reach the edge of the paper, matching the full-width
-     TOTAL line's span. Only used for section dividers — lineLR/center still
-     use W so their text alignment stays correct. */
-  var Wdash = is58 ? 25 : 35;
+  /* dashLineWide uses Wdash from the profile selector — sized to fill the
+     paper width for that render mode so dividers reach the paper edge. */
   function dashLineWide() { return '-'.repeat(Wdash); }
   function wrapText(txt, indent) {
     var prefix = indent || '';
@@ -2116,6 +2135,32 @@ function BackupRestore(props) {
         'Prints all copies in one job — each copy is separated by a short blank gap.'
       )
     ),
+    /* Print mode selector — switches between USB and Bluetooth render profiles.
+       The two Looped Labs services rasterize differently; this lets the user
+       compensate without touching code. */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udcf6 PRINT MODE'),
+      h('div', {style:{display:'flex',gap:8}},
+        [['usb','USB'],['bluetooth','Bluetooth']].map(function(opt) {
+          var v = opt[0], label = opt[1];
+          var active = props.printMode === v;
+          return h('button', {
+            key: v, className:'mbtn',
+            onClick: function(){ props.setPrintMode(v); },
+            style:{
+              flex:1, padding:'12px 0', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.muted,
+              fontWeight:700, fontSize:14, cursor:'pointer'
+            }
+          }, label);
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.muted,marginTop:10}},
+        'USB: tuned for Looped Labs USB Print Service. Bluetooth: bigger fonts and wider content to compensate for Bluetooth print services that shrink output. Switch when you change cable.'
+      )
+    ),
     /* Trailing feed in millimetres — physical paper feed past the last line.
        Uses non-blank filler so print services can't trim it, and an explicit
        mm-height container so feed length is exact regardless of font metrics. */
@@ -2215,6 +2260,7 @@ function App() {
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
   var feedMmState = useState(function(){ return localStorage.getItem('hongs_feedmm') || '20'; }); var feedMm = feedMmState[0]; var setFeedMm = feedMmState[1];
+  var printModeState = useState(function(){ return localStorage.getItem('hongs_printmode') || 'usb'; }); var printMode = printModeState[0]; var setPrintMode = printModeState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
@@ -2237,6 +2283,7 @@ function App() {
   useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
   useEffect(function(){ localStorage.setItem('hongs_feedmm', feedMm); }, [feedMm]);
+  useEffect(function(){ localStorage.setItem('hongs_printmode', printMode); }, [printMode]);
   useEffect(function(){ localStorage.setItem('hongs_basket_order', JSON.stringify(order)); }, [order]);
   useEffect(function(){ localStorage.setItem('hongs_basket_customer', JSON.stringify(customer)); }, [customer]);
   useEffect(function(){ localStorage.setItem('hongs_basket_ordertype', orderType); }, [orderType]);
@@ -2333,7 +2380,7 @@ function App() {
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedMm); }, 150);
+    setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedMm, printMode); }, 150);
   }
 
   function addToQueue() {
@@ -2418,7 +2465,7 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
 
   useEffect(function(){
@@ -2430,7 +2477,7 @@ function App() {
 
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
-      printReceipt(ord, paperSize, copies, feedMm);
+      printReceipt(ord, paperSize, copies, feedMm, printMode);
       setOrders(function(prev){ return [ord].concat(prev); });
       setQueue(function(prev){ return prev.filter(function(q){ return q.id !== ord.id; }); });
     },
@@ -2459,7 +2506,7 @@ function App() {
     });
   }
 
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedMm); },menuItems:menuItems};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedMm, printMode); },menuItems:menuItems};
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
   var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen};
 
@@ -2492,7 +2539,7 @@ function App() {
       ),
       printModal && h(PrintQueueModal, {
         jobs: printModal.jobs, idx: printModal.idx,
-        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedMm); },
+        onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedMm, printMode); },
         onNext: function(){
           var nextIdx = printModal.idx + 1;
           if (nextIdx >= printModal.jobs.length) {
@@ -2538,7 +2585,7 @@ function App() {
     ),
     printModal && h(PrintQueueModal, {
       jobs: printModal.jobs, idx: printModal.idx,
-      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedMm); },
+      onPrintThis: function(){ printReceipt(printModal.jobs[printModal.idx].ord, paperSize, copies, feedMm, printMode); },
       onNext: function(){
         var nextIdx = printModal.idx + 1;
         if (nextIdx >= printModal.jobs.length) {
