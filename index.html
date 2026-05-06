@@ -31,6 +31,33 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
 <div id="root"></div>
 <div id="receipt-frame"></div>
 <script>
+/* ── Safe localStorage helpers ────────────────────────────────────────────
+   Browser localStorage can throw on write — out of quota (e.g. very full
+   storage on the tablet), private browsing mode on iOS, etc. Bare setItem
+   calls would crash the app. These wrappers fail silently — the worst case
+   is that a setting won't persist, but the app keeps running. Reads are
+   already wrapped in try/catch where parsing is involved. */
+function lsGet(key, fallback) {
+  try { var v = localStorage.getItem(key); return v == null ? fallback : v; }
+  catch(e) { return fallback; }
+}
+function lsSet(key, value) {
+  try { lsSet(key, value); return true; }
+  catch(e) { return false; }
+}
+function lsGetJson(key, fallback) {
+  try {
+    var v = localStorage.getItem(key);
+    if (v == null) return fallback;
+    var parsed = JSON.parse(v);
+    return parsed == null ? fallback : parsed;
+  } catch(e) { return fallback; }
+}
+function lsSetJson(key, value) {
+  try { lsSetJson(key, value); return true; }
+  catch(e) { return false; }
+}
+
 'use strict';
 var h = React.createElement;
 var useState = React.useState;
@@ -134,10 +161,11 @@ var MENU = [
   {id:29, num:'29', name:'Sea Bass Pad Gra Pao',          cat:'Fish Dishes', price:12.50},
   {id:30, num:'30', name:'Steamed Sea Bass Fillet',                cat:'Fish Dishes', price:12.50},
 
+  {id:310,num:'31', name:'Phad Thai — Duck',                   cat:'Noodles', grp:'Phad Thai', price:9.50},
   {id:31, num:'31', name:'Phad Thai — Prawn',                  cat:'Noodles', grp:'Phad Thai', price:8.50},
   {id:311,num:'31', name:'Phad Thai — Beef',                   cat:'Noodles', grp:'Phad Thai', price:8.50},
-  {id:312,num:'31', name:'Phad Thai — Chicken',           cat:'Noodles', grp:'Phad Thai', price:7.95},
-  {id:812,num:'31', name:'Phad Thai — Pork',              cat:'Noodles', grp:'Phad Thai', price:7.95},
+  {id:312,num:'31', name:'Phad Thai — Chicken',                cat:'Noodles', grp:'Phad Thai', price:7.95},
+  {id:812,num:'31', name:'Phad Thai — Pork',                   cat:'Noodles', grp:'Phad Thai', price:7.95},
   {id:313,num:'31', name:'Phad Thai — Veg (V)',                cat:'Noodles', grp:'Phad Thai', price:6.95},
   {id:32, num:'32', name:'Plain Noodles (V)',                       cat:'Noodles',                     price:4.95},
 
@@ -563,6 +591,31 @@ function parseCharge(str) {
   if (!str) return 0;
   return parseFloat(String(str).replace('£','').replace('\u00a3','')) || 0;
 }
+/* Protein priority — used as tiebreaker when items in a group share the same
+   price. Lower number = higher priority. Order: Duck > Prawn > Beef > Chicken
+   > Pork > Veg > (anything else). */
+var PROTEIN_RANK = {duck:0, prawn:1, beef:2, chicken:3, pork:4, veg:5};
+function proteinKey(item) {
+  /* Take the part after " — " (e.g. "Phad Thai — Duck" -> "duck"). */
+  var n = String(item.name || '');
+  var sep = n.indexOf(' — ');
+  var variant = (sep > -1 ? n.slice(sep + 3) : n).toLowerCase().trim();
+  /* Strip trailing parens like "(V)" and check first word against the rank table. */
+  var firstWord = variant.replace(/\s*\(.*\)\s*/g, '').split(/\s+/)[0];
+  return PROTEIN_RANK[firstWord] != null ? PROTEIN_RANK[firstWord] : 99;
+}
+/* Sort group items by price desc, then by protein priority asc.
+   Stable: items with same price + same protein key keep their original order. */
+function sortGroupItems(items) {
+  return items.map(function(it, idx){ return {it:it, idx:idx, p:it.price, k:proteinKey(it)}; })
+    .sort(function(a, b) {
+      if (a.p !== b.p) return b.p - a.p;       /* price desc */
+      if (a.k !== b.k) return a.k - b.k;       /* protein priority asc */
+      return a.idx - b.idx;                     /* stable */
+    })
+    .map(function(x){ return x.it; });
+}
+
 function buildGroups(items) {
   /* First pass: build groups from the `grp` field. */
   var result = [];
@@ -575,6 +628,7 @@ function buildGroups(items) {
     if (!seen[key]) {
       seen[key] = true;
       var grpItems = g ? items.filter(function(x){ return x.grp === g; }) : [item];
+      if (g) grpItems = sortGroupItems(grpItems);
       var sec = {grp: g, items: grpItems};
       result.push(sec);
       if (g) {
@@ -585,7 +639,9 @@ function buildGroups(items) {
       }
     }
   }
-  /* Second pass: solo items sharing a num with an existing group join that group. */
+  /* Second pass: solo items sharing a num with an existing group join that
+     group. After absorption, re-sort the group so the absorbed item lands in
+     its proper price/protein position. */
   var finalResult = [];
   for (var j = 0; j < result.length; j++) {
     var s = result[j];
@@ -595,6 +651,7 @@ function buildGroups(items) {
       var host = (sn != null && sn !== '' && sn !== '—') ? grpsByNum[sn] : null;
       if (host && host !== s) {
         host.items.push(soloItem);
+        host.items = sortGroupItems(host.items);
         continue;
       }
     }
@@ -2378,23 +2435,23 @@ function App() {
   }); var discountPanelOpen = discountPanelOpenState[0]; var setDiscountPanelOpen = discountPanelOpenState[1];
   var catRefs = useRef({});
 
-  useEffect(function(){ localStorage.setItem('hongs_m5', JSON.stringify(menuItems)); }, [menuItems]);
-  useEffect(function(){ localStorage.setItem('hongs_z', JSON.stringify(zones)); }, [zones]);
-  useEffect(function(){ localStorage.setItem('hongs_o', JSON.stringify(orders)); }, [orders]);
-  useEffect(function(){ localStorage.setItem('hongs_q', JSON.stringify(queue)); }, [queue]);
-  useEffect(function(){ localStorage.setItem('hongs_paper', paperSize); }, [paperSize]);
-  useEffect(function(){ localStorage.setItem('hongs_copies', copies); }, [copies]);
-  useEffect(function(){ localStorage.setItem('hongs_feedmm', feedMm); }, [feedMm]);
-  useEffect(function(){ localStorage.setItem('hongs_printmode', printMode); }, [printMode]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_order', JSON.stringify(order)); }, [order]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_customer', JSON.stringify(customer)); }, [customer]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_ordertype', orderType); }, [orderType]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_payment', paymentType||''); }, [paymentType]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_zone', selZone||''); }, [selZone]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_schtype', scheduleType); }, [scheduleType]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_schtime', scheduleTime); }, [scheduleTime]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_discount', JSON.stringify(discount)); }, [discount]);
-  useEffect(function(){ localStorage.setItem('hongs_basket_override', priceOverride); }, [priceOverride]);
+  useEffect(function(){ lsSetJson('hongs_m5', menuItems); }, [menuItems]);
+  useEffect(function(){ lsSetJson('hongs_z', zones); }, [zones]);
+  useEffect(function(){ lsSetJson('hongs_o', orders); }, [orders]);
+  useEffect(function(){ lsSetJson('hongs_q', queue); }, [queue]);
+  useEffect(function(){ lsSet('hongs_paper', paperSize); }, [paperSize]);
+  useEffect(function(){ lsSet('hongs_copies', copies); }, [copies]);
+  useEffect(function(){ lsSet('hongs_feedmm', feedMm); }, [feedMm]);
+  useEffect(function(){ lsSet('hongs_printmode', printMode); }, [printMode]);
+  useEffect(function(){ lsSetJson('hongs_basket_order', order); }, [order]);
+  useEffect(function(){ lsSetJson('hongs_basket_customer', customer); }, [customer]);
+  useEffect(function(){ lsSet('hongs_basket_ordertype', orderType); }, [orderType]);
+  useEffect(function(){ lsSet('hongs_basket_payment', paymentType||''); }, [paymentType]);
+  useEffect(function(){ lsSet('hongs_basket_zone', selZone||''); }, [selZone]);
+  useEffect(function(){ lsSet('hongs_basket_schtype', scheduleType); }, [scheduleType]);
+  useEffect(function(){ lsSet('hongs_basket_schtime', scheduleTime); }, [scheduleTime]);
+  useEffect(function(){ lsSetJson('hongs_basket_discount', discount); }, [discount]);
+  useEffect(function(){ lsSet('hongs_basket_override', priceOverride); }, [priceOverride]);
   useEffect(function(){ if (orderType !== 'delivery') setSelZone(null); }, [orderType]);
   useEffect(function() {
     function fn() { setIsDesktop(window.innerWidth >= 800); }
