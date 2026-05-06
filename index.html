@@ -284,6 +284,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
         'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
       '}' +
+      /* Keep each receipt copy on a single page — prevents preview/print engine
+         from splitting a tall receipt across pages and shifting layout. */
+      '#receipt-frame .receipt-copy{page-break-inside:avoid;break-inside:avoid;}' +
     '}';
 
   function escHtml(s) {
@@ -350,12 +353,10 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     /* Customer info block + big C/D letter */
     var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
     var infoLines = [];
-    /* Customer info — each entry followed by a blank line so the user can
-       write the missing field by hand if it wasn't entered in the system. */
+    /* Customer info — handwriting blank lines under Name, Tel, and Address only.
+       Date and Time are always populated by the system, so no blank needed. */
     infoLines.push('Date : ' + (ord.date || ''));
-    infoLines.push('');
     infoLines.push('Time : ' + (ord.time || ''));
-    infoLines.push('');
     infoLines.push('Name : ' + (ord.customer.name || ''));
     infoLines.push('');
     infoLines.push('Tel  : ' + (ord.customer.phone || ''));
