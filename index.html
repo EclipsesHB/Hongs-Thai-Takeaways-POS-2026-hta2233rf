@@ -818,9 +818,13 @@ function MenuScreen(props) {
           h('button', {
             className:'mbtn',
             onClick: function(){
+              /* Strip any legacy "#NN " prefix from sec.grp so the basket and
+                 receipt show just "Thai Green Curry — " not "#15 Thai Green Curry — ".
+                 Same regex used for the visible label so they always match. */
+              var cleanGrp = String(sec.grp || '').replace(/^#\d+\w*\s+/, '');
               /* lockedPrefix is a marker the basket reads to render the
                  prefix as read-only — user can only type after the em-dash. */
-              var prefix = sec.grp + ' — ';
+              var prefix = cleanGrp + ' — ';
               onAdd({id:'grp_'+sec.grp+'_'+Date.now(), num:'—', name: prefix, price:0, custom:true, lockedPrefix: prefix});
             },
             style:{
