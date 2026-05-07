@@ -2465,8 +2465,30 @@ function BackupRestore(props) {
 
 /* ── MAIN APP ── */
 function App() {
+  /* Category renames migration: when category names changed (Fish Dishes -> Fish,
+     Rice & Sides -> Rice / Chips, Kids Menu -> Kids), existing localStorage
+     data still had the old names, leaving those items stranded. This runs
+     once on load to translate old names to new — silent, idempotent. */
+  var CAT_MIGRATIONS = {
+    'Fish Dishes': 'Fish',
+    'Rice & Sides': 'Rice / Chips',
+    'Kids Menu': 'Kids'
+  };
+  function migrateMenu(items) {
+    if (!Array.isArray(items)) return items;
+    return items.map(function(it) {
+      if (it && CAT_MIGRATIONS[it.cat]) {
+        return Object.assign({}, it, {cat: CAT_MIGRATIONS[it.cat]});
+      }
+      return it;
+    });
+  }
   var menuItemsState = useState(function() {
-    try { var s = JSON.parse(localStorage.getItem('hongs_m5') || 'null'); return s && s.length ? s : MENU; } catch(e) { return MENU; }
+    try {
+      var s = JSON.parse(localStorage.getItem('hongs_m5') || 'null');
+      var items = s && s.length ? s : MENU;
+      return migrateMenu(items);
+    } catch(e) { return MENU; }
   });
   var menuItems = menuItemsState[0]; var setMenuItems = menuItemsState[1];
 
