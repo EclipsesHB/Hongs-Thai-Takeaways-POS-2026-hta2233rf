@@ -44,7 +44,7 @@ function lsGet(key, fallback) {
   catch(e) { return fallback; }
 }
 function lsSet(key, value) {
-  try { lsSet(key, value); return true; }
+  try { localStorage.setItem(key, value); return true; }
   catch(e) { return false; }
 }
 function lsGetJson(key, fallback) {
@@ -56,7 +56,7 @@ function lsGetJson(key, fallback) {
   } catch(e) { return fallback; }
 }
 function lsSetJson(key, value) {
-  try { lsSetJson(key, value); return true; }
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
   catch(e) { return false; }
 }
 
