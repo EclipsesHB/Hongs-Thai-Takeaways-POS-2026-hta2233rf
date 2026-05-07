@@ -732,17 +732,9 @@ function MenuScreen(props) {
     }, 80);
   }
 
-  /* Pre-compute the index of the LAST category that actually has items,
-     so we know which categories need a bottom spacer (to allow their title
-     to scroll to the top of the viewport) and which don't. The last category
-     gets no spacer because there's nothing below it that needs scrolling room. */
-  var catsWithItems = catsToShow.filter(function(c){ return getCatItems(c).length > 0; });
-  var lastCatWithItems = catsWithItems[catsWithItems.length - 1];
-
   var catNodes = catsToShow.map(function(cat) {
     var catItems = getCatItems(cat);
     if (!catItems.length) return null;
-    var isLastCat = cat === lastCatWithItems;
     var groups = buildGroups(catItems);
     /* maxCols is the max tiles per row. Most categories use 6 (desktop) so
        a 6-variant group like Pad Khing (Duck/Prawn/Chicken/Pork/Beef/Veg) fits
@@ -862,9 +854,6 @@ function MenuScreen(props) {
     });
     flushSolos();
 
-    /* Bottom spacer per non-last category so the next category title can be
-       scrolled to the top of the viewport. The LAST category has no spacer
-       (nothing to scroll to below it), so the user can't scroll past content. */
     return h('div', {
       key: cat,
       ref: function(el){ catRefs.current[cat] = el; },
@@ -874,8 +863,7 @@ function MenuScreen(props) {
         h('span', {style:{fontSize:18}}, ICONS[cat]),
         h('span', {style:{fontSize:13,fontWeight:800,color:C.accent,letterSpacing:1.5,textTransform:'uppercase'}}, cat)
       ),
-      renderedBlocks,
-      !isLastCat && h('div', {style:{height:'40vh'}})
+      renderedBlocks
     );
   });
 
@@ -954,6 +942,11 @@ function MenuScreen(props) {
       style:{flex:1,overflowY:'auto',overflowX:'hidden',WebkitOverflowScrolling:'touch',padding: isDesktop ? '10px 10px 20px' : '4px 10px 20px'}
     },
       catNodes,
+      /* Spacer at the end of the scroll container so the LAST few categories
+         can be scrolled up to the top of the viewport. Without this, scrolling
+         to a category near the bottom (Rice/Chips, Kids, etc.) hits the scroll
+         max before the title reaches the top, making the click feel broken. */
+      h('div', {style:{height:'70vh'}}),
       catsToShow.length === 0 && h('div', {style:{textAlign:'center',padding:'60px 20px',color:C.muted}},
         h('div', {style:{fontSize:30,marginBottom:8}}, '🔍'),
         h('div', {style:{fontWeight:600}}, 'No items match "' + search + '"')
