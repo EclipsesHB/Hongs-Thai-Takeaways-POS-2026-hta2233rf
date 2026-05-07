@@ -812,7 +812,10 @@ function MenuScreen(props) {
           h('button', {
             className:'mbtn',
             onClick: function(){
-              onAdd({id:'grp_'+sec.grp+'_'+Date.now(), num:'—', name: sec.grp + ' — ', price:0, custom:true});
+              /* lockedPrefix is a marker the basket reads to render the
+                 prefix as read-only — user can only type after the em-dash. */
+              var prefix = sec.grp + ' — ';
+              onAdd({id:'grp_'+sec.grp+'_'+Date.now(), num:'—', name: prefix, price:0, custom:true, lockedPrefix: prefix});
             },
             style:{
               display:'inline-flex', alignItems:'center', gap:4,
@@ -823,7 +826,15 @@ function MenuScreen(props) {
             }
           },
             h('span', {style:{fontSize:11}}, '+'),
-            h('span', null, '#' + (sec.items[0] && sec.items[0].num ? sec.items[0].num : '') + ' ' + sec.grp)
+            h('span', null, (function(){
+              /* Strip any leading "#NN " from sec.grp itself in case the user has
+                 legacy localStorage where the group name already includes the
+                 number. We always render exactly one '#NN ' prefix derived from
+                 the first item's num. */
+              var cleanGrp = String(sec.grp || '').replace(/^#\d+\w*\s+/, '');
+              var num = sec.items[0] && sec.items[0].num ? sec.items[0].num : '';
+              return '#' + num + ' ' + cleanGrp;
+            })())
           ),
           h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gap:6}},
             sec.items.map(function(it){ return renderTile(it, true, sec.items.length); })
@@ -850,14 +861,14 @@ function MenuScreen(props) {
      so they look uniform in size and alignment. */
   function pillStyle(active) {
     return {
-      padding: isDesktop ? '11px 10px' : '5px 6px',
+      padding: isDesktop ? '10px 6px' : '5px 6px',
       borderRadius:8,
       border:'1px solid ' + (active ? C.accent : C.border),
       background: active ? C.accent : 'transparent',
       color: active ? C.bg : C.muted,
-      fontSize: isDesktop ? 14 : 11, fontWeight:700, cursor:'pointer',
+      fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer',
       whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
-      textAlign:'center', height: isDesktop ? 44 : 28,
+      textAlign:'center', height: isDesktop ? 42 : 28,
       display:'flex', alignItems:'center', justifyContent:'center'
     };
   }
@@ -901,7 +912,7 @@ function MenuScreen(props) {
         )
       : /* When closed: search+All cell + one cell per category, all in an
            auto-fit grid so pills are evenly sized and rows are clean. */
-        h('div', {style:{display:'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : 'repeat(auto-fit, minmax(80px, 1fr))', gap:5}},
+        h('div', {style:{display:'grid', gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(auto-fit, minmax(80px, 1fr))', gap:5}},
           [searchAllCell].concat(CATS.map(function(cat) {
             var active = cat === activeCat;
             return h('button', {
@@ -921,6 +932,11 @@ function MenuScreen(props) {
       style:{flex:1,overflowY:'auto',overflowX:'hidden',WebkitOverflowScrolling:'touch',padding: isDesktop ? '10px 10px 20px' : '4px 10px 20px'}
     },
       catNodes,
+      /* Spacer at the end of the scroll container so the LAST few categories
+         can be scrolled up to the top of the viewport. Without this, scrolling
+         to a category near the bottom (Rice/Chips, Kids, etc.) hits the scroll
+         max before the title reaches the top, making the click feel broken. */
+      h('div', {style:{height:'70vh'}}),
       catsToShow.length === 0 && h('div', {style:{textAlign:'center',padding:'60px 20px',color:C.muted}},
         h('div', {style:{fontSize:30,marginBottom:8}}, '🔍'),
         h('div', {style:{fontWeight:600}}, 'No items match "' + search + '"')
@@ -1050,12 +1066,27 @@ function DraggableOrderList(props) {
           ),
           h('div', {style:{flex:1,minWidth:0}},
             isCustom
-              ? h('input', {
-                  placeholder:'✏️ Item name...',
-                  value: item.name === 'Custom Item' ? '' : item.name,
-                  onChange: function(e){ updateItemName(item.id, e.target.value || 'Custom Item'); },
-                  style:{width:'100%', background:'transparent', border:'none', borderBottom:'1px solid ' + C.accent, color:C.text, fontSize:13, fontWeight:600, outline:'none', padding:'2px 0'}
-                })
+              ? (item.lockedPrefix
+                  /* Locked-prefix custom items (created via group label) show the
+                     prefix as read-only text, with an editable input for the rest.
+                     This prevents the user from accidentally editing/removing the
+                     group name (e.g. "Thai Green Curry — "). */
+                  ? h('div', {style:{display:'flex', alignItems:'center', flexWrap:'wrap', gap:0, borderBottom:'1px solid ' + C.accent, padding:'2px 0'}},
+                      h('span', {style:{fontSize:13, fontWeight:700, color:C.accent}}, item.lockedPrefix),
+                      h('input', {
+                        placeholder:'finish item name...',
+                        value: item.name.indexOf(item.lockedPrefix) === 0 ? item.name.slice(item.lockedPrefix.length) : '',
+                        onChange: function(e){ updateItemName(item.id, item.lockedPrefix + e.target.value); },
+                        style:{flex:1, minWidth:80, background:'transparent', border:'none', color:C.text, fontSize:13, fontWeight:600, outline:'none', padding:0}
+                      })
+                    )
+                  : h('input', {
+                      placeholder:'✏️ Item name...',
+                      value: item.name === 'Custom Item' ? '' : item.name,
+                      onChange: function(e){ updateItemName(item.id, e.target.value || 'Custom Item'); },
+                      style:{width:'100%', background:'transparent', border:'none', borderBottom:'1px solid ' + C.accent, color:C.text, fontSize:13, fontWeight:600, outline:'none', padding:'2px 0'}
+                    })
+                )
               : h('div', {style:{fontSize:13,fontWeight:600,lineHeight:1.3}}, item.name),
             h('div', {style:{fontSize:13,color:C.accent,fontWeight:700,marginTop:2}},
               '\u00a3' + (item.price * item.qty + (parseFloat(item.extra) || 0)).toFixed(2),
@@ -2208,8 +2239,8 @@ function HistoryView(props) {
             /* Payment type editor — toggle between Cash and Card.
                Lives in the order's draft.paymentType; saveEdit() persists. */
             h('div', {style:{display:'flex',gap:8,marginTop:10,marginBottom:10}},
-              h('button', {className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{paymentType:'cash'})); }, style:{flex:1,padding:'10px 8px',borderRadius:8,border:'1px solid ' + (draft.paymentType==='cash' ? C.accent : C.border),background: draft.paymentType==='cash' ? C.accentBg : 'transparent',color: draft.paymentType==='cash' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, '💵 Cash'),
-              h('button', {className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{paymentType:'card'})); }, style:{flex:1,padding:'10px 8px',borderRadius:8,border:'1px solid ' + (draft.paymentType==='card' ? C.accent : C.border),background: draft.paymentType==='card' ? C.accentBg : 'transparent',color: draft.paymentType==='card' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, '💳 Card')
+              h('button', {className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{paymentType: draft.paymentType==='cash' ? null : 'cash'})); }, style:{flex:1,padding:'10px 8px',borderRadius:8,border:'1px solid ' + (draft.paymentType==='cash' ? C.accent : C.border),background: draft.paymentType==='cash' ? C.accentBg : 'transparent',color: draft.paymentType==='cash' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, '💵 Cash'),
+              h('button', {className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{paymentType: draft.paymentType==='card' ? null : 'card'})); }, style:{flex:1,padding:'10px 8px',borderRadius:8,border:'1px solid ' + (draft.paymentType==='card' ? C.accent : C.border),background: draft.paymentType==='card' ? C.accentBg : 'transparent',color: draft.paymentType==='card' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, '💳 Card')
             ),
             h('div', {style:{display:'flex',gap:8,marginTop:10}},
               h('button', {className:'mbtn', onClick:saveEdit, style:{flex:1,padding:12,borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, '💾 Save Changes'),
@@ -2305,11 +2336,12 @@ function BackupRestore(props) {
             key: n, className:'mbtn',
             onClick: function(){ setCopies(n); },
             style:{
-              flex:1, padding:'10px 8px', borderRadius:9,
+              flex:1, padding:'18px 8px', borderRadius:10,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
               color: active ? C.accent : C.text,
-              fontWeight:700, fontSize:13, cursor:'pointer'
+              fontWeight:700, fontSize:15, cursor:'pointer',
+              minHeight:60
             }
           }, n + (n === '1' ? ' copy' : ' copies'));
         })
@@ -2331,11 +2363,12 @@ function BackupRestore(props) {
             key: v, className:'mbtn',
             onClick: function(){ props.setPrintMode(v); },
             style:{
-              flex:1, padding:'12px 0', borderRadius:9,
+              flex:1, padding:'18px 0', borderRadius:10,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
               color: active ? C.accent : C.text,
-              fontWeight:700, fontSize:14, cursor:'pointer'
+              fontWeight:700, fontSize:15, cursor:'pointer',
+              minHeight:60
             }
           }, label);
         })
