@@ -75,11 +75,11 @@ var C = {
 };
 
 /* ── STATIC DATA ── */
-var CATS = ['Starters','Curry','Stir Fried','Duck','Fish Dishes','Noodles','Rice & Sides','Kids Menu','Soft Drinks','Set Menus','Misc'];
+var CATS = ['Starters','Curry','Stir Fried','Duck','Fish','Noodles','Rice / Chips','Kids','Soft Drinks','Set Menus','Misc'];
 var ICONS = {
   'Starters':'🥟','Curry':'🍛','Stir Fried':'🥘','Duck':'🦆',
-  'Fish Dishes':'🐟','Noodles':'🍜','Rice & Sides':'🍚',
-  'Kids Menu':'👶','Soft Drinks':'🥤','Set Menus':'🍽️','Misc':'🍴'
+  'Fish':'🐟','Noodles':'🍜','Rice / Chips':'🍚',
+  'Kids':'👶','Soft Drinks':'🥤','Set Menus':'🍽️','Misc':'🍴'
 };
 
 var MENU = [
@@ -157,11 +157,10 @@ var MENU = [
   {id:26, num:'26', name:'Tamarind Duck',                          cat:'Duck',        price:11.50},
   {id:27, num:'27', name:'Red Duck Curry',                   cat:'Duck',        price:11.50},
 
-  {id:28, num:'28', name:'Sea Bass Pad Khing',                     cat:'Fish Dishes', price:12.50},
-  {id:29, num:'29', name:'Sea Bass Pad Gra Pao',          cat:'Fish Dishes', price:12.50},
-  {id:30, num:'30', name:'Steamed Sea Bass Fillet',                cat:'Fish Dishes', price:12.50},
+  {id:28, num:'28', name:'Sea Bass Pad Khing',                     cat:'Fish', price:12.50},
+  {id:29, num:'29', name:'Sea Bass Pad Gra Pao',          cat:'Fish', price:12.50},
+  {id:30, num:'30', name:'Steamed Sea Bass Fillet',                cat:'Fish', price:12.50},
 
-  {id:310,num:'31', name:'Phad Thai — Duck',                   cat:'Noodles', grp:'Phad Thai', price:9.50},
   {id:31, num:'31', name:'Phad Thai — Prawn',                  cat:'Noodles', grp:'Phad Thai', price:8.50},
   {id:311,num:'31', name:'Phad Thai — Beef',                   cat:'Noodles', grp:'Phad Thai', price:8.50},
   {id:312,num:'31', name:'Phad Thai — Chicken',                cat:'Noodles', grp:'Phad Thai', price:7.95},
@@ -169,17 +168,17 @@ var MENU = [
   {id:313,num:'31', name:'Phad Thai — Veg (V)',                cat:'Noodles', grp:'Phad Thai', price:6.95},
   {id:32, num:'32', name:'Plain Noodles (V)',                       cat:'Noodles',                     price:4.95},
 
-  {id:33, num:'33', name:'Steamed Jasmine Rice (V)',               cat:'Rice & Sides', price:2.95},
-  {id:34, num:'34', name:'Egg Fried Rice (V)',                     cat:'Rice & Sides', price:3.50},
-  {id:35, num:'35', name:'Coconut Rice (V)',                       cat:'Rice & Sides', price:3.50},
-  {id:36, num:'36', name:'Vegetable Fried Rice (V)',               cat:'Rice & Sides', price:7.50},
-  {id:37, num:'37', name:'Chicken Fried Rice',                     cat:'Rice & Sides', price:7.95},
-  {id:38, num:'38', name:'King Prawn Fried Rice',                  cat:'Rice & Sides', price:8.50},
-  {id:39, num:'39', name:'Sticky Rice',                            cat:'Rice & Sides', price:3.95},
-  {id:40, num:'40', name:'Chips (V)',                              cat:'Rice & Sides', price:3.00},
+  {id:33, num:'33', name:'Steamed Jasmine Rice (V)',               cat:'Rice / Chips', price:2.95},
+  {id:34, num:'34', name:'Egg Fried Rice (V)',                     cat:'Rice / Chips', price:3.50},
+  {id:35, num:'35', name:'Coconut Rice (V)',                       cat:'Rice / Chips', price:3.50},
+  {id:36, num:'36', name:'Vegetable Fried Rice (V)',               cat:'Rice / Chips', price:7.50},
+  {id:37, num:'37', name:'Chicken Fried Rice',                     cat:'Rice / Chips', price:7.95},
+  {id:38, num:'38', name:'King Prawn Fried Rice',                  cat:'Rice / Chips', price:8.50},
+  {id:39, num:'39', name:'Sticky Rice',                            cat:'Rice / Chips', price:3.95},
+  {id:40, num:'40', name:'Chips (V)',                              cat:'Rice / Chips', price:3.00},
 
-  {id:41, num:'41', name:'Chicken Nuggets & Chips (x6)',           cat:'Kids Menu', price:4.95},
-  {id:42, num:'42', name:'Crispy Chicken Fillet & Chips (x4)',     cat:'Kids Menu', price:4.95},
+  {id:41, num:'41', name:'Chicken Nuggets & Chips (x6)',           cat:'Kids', price:4.95},
+  {id:42, num:'42', name:'Crispy Chicken Fillet & Chips (x4)',     cat:'Kids', price:4.95},
 
   {id:43, num:'—', name:'7up',       cat:'Soft Drinks', price:1.30},
   {id:44, num:'—', name:'Coke',      cat:'Soft Drinks', price:1.30},
@@ -736,7 +735,7 @@ function MenuScreen(props) {
        on one line. Categories with shorter labels and many small items
        (Starters, Rice & Sides, Misc) use 5 since 6 makes tiles too narrow.
        Mobile uses 2 across the board. */
-    var fiveColCats = {'Starters':1, 'Rice & Sides':1, 'Misc':1};
+    var fiveColCats = {'Starters':1, 'Rice / Chips':1, 'Misc':1};
     var maxCols = isDesktop ? (fiveColCats[cat] ? 5 : 6) : 2;
 
     /* Tile renderer — used for both solo items and items inside a group.
@@ -805,7 +804,27 @@ function MenuScreen(props) {
         var grpStyle = {marginBottom:10};
         if (!isFirstGrp) { grpStyle.paddingTop = 8; grpStyle.borderTop = '1px solid ' + C.border; }
         renderedBlocks.push(h('div', {key:'gb'+(blockKey++), style:grpStyle},
-          h('div', {style:{fontSize:12,fontWeight:700,color:C.dim,marginBottom:5,paddingLeft:2}}, sec.grp),
+          /* Clickable group label — pressing it adds a custom item to the
+             order pre-filled with "<grp> — " so the user can complete the
+             name and set a custom price for off-menu variations (e.g. mixed
+             proteins). The visible label includes "#NN " prefix from the
+             group's first item num. */
+          h('button', {
+            className:'mbtn',
+            onClick: function(){
+              onAdd({id:'grp_'+sec.grp+'_'+Date.now(), num:'—', name: sec.grp + ' — ', price:0, custom:true});
+            },
+            style:{
+              display:'inline-flex', alignItems:'center', gap:4,
+              fontSize:12, fontWeight:700, color:C.accent,
+              background:'transparent', border:'1px solid ' + C.border,
+              borderRadius:6, padding:'3px 8px', marginBottom:5,
+              cursor:'pointer'
+            }
+          },
+            h('span', {style:{fontSize:11}}, '+'),
+            h('span', null, '#' + (sec.items[0] && sec.items[0].num ? sec.items[0].num : '') + ' ' + sec.grp)
+          ),
           h('div', {style:{display:'grid', gridTemplateColumns:'repeat('+grpCols+',1fr)', gap:6}},
             sec.items.map(function(it){ return renderTile(it, true, sec.items.length); })
           )
@@ -831,14 +850,14 @@ function MenuScreen(props) {
      so they look uniform in size and alignment. */
   function pillStyle(active) {
     return {
-      padding: isDesktop ? '9px 8px' : '5px 6px',
-      borderRadius:7,
+      padding: isDesktop ? '11px 10px' : '5px 6px',
+      borderRadius:8,
       border:'1px solid ' + (active ? C.accent : C.border),
       background: active ? C.accent : 'transparent',
       color: active ? C.bg : C.muted,
-      fontSize: isDesktop ? 13 : 11, fontWeight:700, cursor:'pointer',
+      fontSize: isDesktop ? 14 : 11, fontWeight:700, cursor:'pointer',
       whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
-      textAlign:'center', height: isDesktop ? 36 : 28,
+      textAlign:'center', height: isDesktop ? 44 : 28,
       display:'flex', alignItems:'center', justifyContent:'center'
     };
   }
@@ -882,7 +901,7 @@ function MenuScreen(props) {
         )
       : /* When closed: search+All cell + one cell per category, all in an
            auto-fit grid so pills are evenly sized and rows are clean. */
-        h('div', {style:{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(' + (isDesktop ? '110px' : '80px') + ', 1fr))', gap:5}},
+        h('div', {style:{display:'grid', gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : 'repeat(auto-fit, minmax(80px, 1fr))', gap:5}},
           [searchAllCell].concat(CATS.map(function(cat) {
             var active = cat === activeCat;
             return h('button', {
@@ -1169,6 +1188,8 @@ function BasketScreen(props) {
   var setScheduleTime = props.setScheduleTime;
 
   var discountPanelOpen = props.discountPanelOpen; var setDiscountPanelOpen = props.setDiscountPanelOpen;
+  var onPrintLast = props.onPrintLast;
+  var hasLastOrder = props.hasLastOrder;
 
   var inp = {
     width:'100%', background:C.bg, border:'1px solid ' + C.border,
@@ -1346,7 +1367,7 @@ function BasketScreen(props) {
         ? h('div', {style:{background:C.card,borderRadius:10,padding:'8px 10px',marginBottom:8,border:'1px solid ' + (priceOverride !== '' ? '#e07030' : C.accent)}},
             h('div', {style:{display:'flex',gap:6,alignItems:'center',marginBottom:6}},
               h('span', {style:{fontSize:12,fontWeight:700,color: priceOverride !== '' ? '#e07030' : C.accent,flex:1}}, priceOverride !== '' ? '⚡ OVERRIDE + DISCOUNT' : '% DISCOUNT'),
-              h('button', {className:'mbtn', onClick:function(){ setDiscount({type:null,pct:10,custom:''}); setPriceOverride(''); setDiscountPanelOpen(false); }, style:{fontSize:11,color:C.muted,background:'transparent',border:'none',cursor:'pointer',padding:'2px 6px'}}, '✕ Remove')
+              h('button', {className:'mbtn', onClick:function(){ setDiscount({type:null,pct:10,custom:''}); setPriceOverride(''); setDiscountPanelOpen(false); }, style:{fontSize:12, fontWeight:700, color:C.muted, background:'transparent', border:'1px solid ' + C.border, borderRadius:7, cursor:'pointer', padding:'6px 12px'}}, '✕ Remove')
             ),
             h('div', {style:{display:'flex',gap:6,alignItems:'center',marginBottom:6}},
               h('button', {
@@ -1420,14 +1441,28 @@ function BasketScreen(props) {
         h('button', {
           className:'mbtn', onClick:onQueue, disabled:!order.length,
           style:{
-            flex:1, padding:'9px 12px', borderRadius:10,
-            border:'1px solid ' + (order.length ? C.border : C.border),
+            flex:1, padding:'9px 8px', borderRadius:10,
+            border:'1px solid ' + C.border,
             background:'transparent',
             color: order.length ? C.dim : C.muted,
-            fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
+            fontWeight:700, fontSize:12, cursor: order.length ? 'pointer' : 'not-allowed',
             letterSpacing:0.3
           }
-        }, '📋 Add to Queue'),
+        }, '📋 Queue'),
+        /* Print Last Order — quickly reprint the most recent order. Useful on
+           Bluetooth where the first print attempt sometimes fails ("printer not
+           found") so the user can retry without re-entering everything. */
+        h('button', {
+          className:'mbtn', onClick:onPrintLast, disabled:!hasLastOrder,
+          style:{
+            flex:1, padding:'9px 8px', borderRadius:10,
+            border:'1px solid ' + C.border,
+            background:'transparent',
+            color: hasLastOrder ? C.accent : C.muted,
+            fontWeight:700, fontSize:12, cursor: hasLastOrder ? 'pointer' : 'not-allowed',
+            letterSpacing:0.3, whiteSpace:'nowrap'
+          }
+        }, '🖨️ Print Last'),
         h('button', {
           className:'mbtn', onClick:onClearOrder, disabled:!order.length,
           style:{
@@ -1435,7 +1470,7 @@ function BasketScreen(props) {
             border:'1px solid ' + (order.length ? C.danger+'80' : C.border),
             background:'transparent',
             color: order.length ? C.danger : C.muted,
-            fontWeight:700, fontSize:13, cursor: order.length ? 'pointer' : 'not-allowed',
+            fontWeight:700, fontSize:12, cursor: order.length ? 'pointer' : 'not-allowed',
             whiteSpace:'nowrap'
           }
         }, '🗑️ Clear')
@@ -1933,6 +1968,7 @@ function HistoryView(props) {
   var setOrders = props.setOrders;
   var clearOrders = props.clearOrders;
   var onPrint = props.onPrint;
+  var onRecall = props.onRecall;
   var menuItems = props.menuItems;
 
   var editingIdRef = useState(null);
@@ -2073,6 +2109,11 @@ function HistoryView(props) {
               h('span', {style:{fontSize:11,color:C.muted}}, ord.date + ' ' + ord.time),
               !isEditing && h(React.Fragment, null,
                 h('button', {className:'mbtn', onClick:function(){ onPrint(ord); }, style:{padding:'5px 10px',borderRadius:8,border:'1px solid ' + C.accent,background:C.accentBg,color:C.accent,cursor:'pointer',fontSize:12,fontWeight:700}}, '🖨️ Print'),
+                /* Recall: load this order back into the order form so it can
+                   be fully edited as if a new order. The original stays in
+                   history. Useful when a customer changes their mind after
+                   you've already placed/printed. */
+                h('button', {className:'mbtn', onClick:function(){ if(onRecall) onRecall(ord); }, style:{padding:'5px 10px',borderRadius:8,border:'1px solid ' + C.accent + '80',background:'transparent',color:C.accent,cursor:'pointer',fontSize:12,fontWeight:700}}, '↩️ Recall'),
                 h('button', {className:'mbtn', onClick:function(){ startEdit(ord); }, style:{padding:'5px 10px',borderRadius:8,border:'1px solid ' + C.border,background:'transparent',color:C.muted,cursor:'pointer',fontSize:12,fontWeight:700}}, '✏️ Edit'),
                 h('button', {className:'mbtn', onClick:function(){ deleteOrder(ord.id); }, style:{padding:'5px 10px',borderRadius:8,border:'1px solid ' + C.danger + '60',background:'transparent',color:C.danger,cursor:'pointer',fontSize:12,fontWeight:700}}, '🗑️')
               )
@@ -2164,6 +2205,12 @@ function HistoryView(props) {
               ),
               h('div', {style:{display:'flex',justifyContent:'space-between',fontWeight:800,fontSize:15}}, h('span',null,'TOTAL'), h('span',{style:{color:C.accent}},'\u00a3'+dTotal.toFixed(2)))
             ),
+            /* Payment type editor — toggle between Cash and Card.
+               Lives in the order's draft.paymentType; saveEdit() persists. */
+            h('div', {style:{display:'flex',gap:8,marginTop:10,marginBottom:10}},
+              h('button', {className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{paymentType:'cash'})); }, style:{flex:1,padding:'10px 8px',borderRadius:8,border:'1px solid ' + (draft.paymentType==='cash' ? C.accent : C.border),background: draft.paymentType==='cash' ? C.accentBg : 'transparent',color: draft.paymentType==='cash' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, '💵 Cash'),
+              h('button', {className:'mbtn', onClick:function(){ setDraft(Object.assign({},draft,{paymentType:'card'})); }, style:{flex:1,padding:'10px 8px',borderRadius:8,border:'1px solid ' + (draft.paymentType==='card' ? C.accent : C.border),background: draft.paymentType==='card' ? C.accentBg : 'transparent',color: draft.paymentType==='card' ? C.accent : C.muted,fontWeight:700,fontSize:13,cursor:'pointer'}}, '💳 Card')
+            ),
             h('div', {style:{display:'flex',gap:8,marginTop:10}},
               h('button', {className:'mbtn', onClick:saveEdit, style:{flex:1,padding:12,borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,cursor:'pointer'}}, '💾 Save Changes'),
               h('button', {className:'mbtn', onClick:cancelEdit, style:{flex:1,padding:12,borderRadius:10,border:'1px solid ' + C.border,background:'transparent',color:C.muted,fontWeight:700,fontSize:14,cursor:'pointer'}}, 'Cancel')
@@ -2248,32 +2295,9 @@ function BackupRestore(props) {
     ),
     h('p', {style:{fontSize:13,color:C.muted,marginBottom:16}}, 'Save your menu, zones and order history to a file, or restore from a previous backup.'),
 
-    /* Paper size toggle */
-    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '🖨️ RECEIPT PAPER SIZE'),
-      h('div', {style:{display:'flex',gap:8}},
-        ['58','80'].map(function(size) {
-          var active = paperSize === size;
-          return h('button', {
-            key: size, className:'mbtn',
-            onClick: function(){ setPaperSize(size); },
-            style:{
-              flex:1, padding:'10px 8px', borderRadius:9,
-              border:'1px solid ' + (active ? C.accent : C.border),
-              background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.muted,
-              fontWeight:700, fontSize:13, cursor:'pointer'
-            }
-          }, size + 'mm');
-        })
-      ),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
-        paperSize === '58' ? 'Fits 58mm thermal paper — most Android POS terminals' : 'Fits 80mm thermal paper — standard desktop receipt printers'
-      )
-    ),
     /* Copies selector */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '🖨️ RECEIPT COPIES'),
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '🖨️ RECEIPT COPIES'),
       h('div', {style:{display:'flex',gap:8}},
         ['1','2','3'].map(function(n) {
           var active = copies === n;
@@ -2284,13 +2308,13 @@ function BackupRestore(props) {
               flex:1, padding:'10px 8px', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.muted,
+              color: active ? C.accent : C.text,
               fontWeight:700, fontSize:13, cursor:'pointer'
             }
           }, n + (n === '1' ? ' copy' : ' copies'));
         })
       ),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:8}},
         'Prints all copies in one job — each copy is separated by a short blank gap.'
       )
     ),
@@ -2298,7 +2322,7 @@ function BackupRestore(props) {
        The two Looped Labs services rasterize differently; this lets the user
        compensate without touching code. */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udcf6 PRINT MODE'),
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udcf6 PRINT MODE'),
       h('div', {style:{display:'flex',gap:8}},
         [['usb','USB'],['bluetooth','Bluetooth']].map(function(opt) {
           var v = opt[0], label = opt[1];
@@ -2310,21 +2334,47 @@ function BackupRestore(props) {
               flex:1, padding:'12px 0', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.muted,
+              color: active ? C.accent : C.text,
               fontWeight:700, fontSize:14, cursor:'pointer'
             }
           }, label);
         })
       ),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:10}},
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
         'USB: tuned for Looped Labs USB Print Service. Bluetooth: bigger fonts and wider content to compensate for Bluetooth print services that shrink output. Switch when you change cable.'
+      )
+    ),
+    /* === Divider between frequently used and advanced settings === */
+    h('div', {style:{borderTop:'1px solid ' + C.border, marginTop:8, marginBottom:14, opacity:0.6}}),
+    h('div', {style:{fontSize:10,fontWeight:700,color:C.dim,letterSpacing:2,marginBottom:10,textTransform:'uppercase'}}, 'Advanced — set once, rarely changed'),
+    /* Paper size toggle */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '🖨️ RECEIPT PAPER SIZE'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['58','80'].map(function(size) {
+          var active = paperSize === size;
+          return h('button', {
+            key: size, className:'mbtn',
+            onClick: function(){ setPaperSize(size); },
+            style:{
+              flex:1, padding:'10px 8px', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.text,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, size + 'mm');
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:8}},
+        paperSize === '58' ? 'Fits 58mm thermal paper — most Android POS terminals' : 'Fits 80mm thermal paper — standard desktop receipt printers'
       )
     ),
     /* Trailing feed in millimetres — physical paper feed past the last line.
        Uses non-blank filler so print services can't trim it, and an explicit
        mm-height container so feed length is exact regardless of font metrics. */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f TRAILING FEED (mm)'),
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f TRAILING FEED (mm)'),
       h('div', {style:{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,marginBottom:6}},
         ['0','5','10','15','20','25'].map(function(n) {
           var active = props.feedMm === n;
@@ -2335,7 +2385,7 @@ function BackupRestore(props) {
               padding:'10px 0', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.muted,
+              color: active ? C.accent : C.text,
               fontWeight:700, fontSize:13, cursor:'pointer'
             }
           }, n);
@@ -2351,28 +2401,28 @@ function BackupRestore(props) {
               padding:'10px 0', borderRadius:9,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.muted,
+              color: active ? C.accent : C.text,
               fontWeight:700, fontSize:13, cursor:'pointer'
             }
           }, n);
         })
       ),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:10}},
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
         'Millimetres of paper to feed past the last line. The NETUM tear bar is ~15-20mm past the print head — start at 15mm and adjust. Filler is invisible (non-breaking spaces) so print services can\'t strip it.'
       )
     ),
     h('div', {style:card},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
       h('button', {className:'mbtn', onClick:doExport, style:{width:'100%',padding:'11px 18px',borderRadius:9,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:C.accent,color:C.bg}}, 'Download Backup File'),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}},
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:8}},
         'Includes: ' + menuItems.length + ' menu items \u00b7 ' + zones.length + ' delivery zones \u00b7 ' + orders.length + ' orders'
       )
     ),
     h('div', {style:card},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:1.5,marginBottom:10}}, '\u2b06\ufe0f RESTORE FROM BACKUP'),
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\u2b06\ufe0f RESTORE FROM BACKUP'),
       h('button', {className:'mbtn', onClick:function(){ fileRef.current.click(); }, style:{width:'100%',padding:'11px 18px',borderRadius:9,fontWeight:700,fontSize:13,cursor:'pointer',background:'transparent',border:'1px solid ' + C.border,color:C.text}}, 'Choose Backup File (.json)'),
       h('input', {ref:fileRef, type:'file', accept:'.json,application/json', style:{display:'none'}, onChange:doImport}),
-      h('div', {style:{fontSize:12,color:C.muted,marginTop:8}}, 'Only .json files exported from this app are supported.')
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:8}}, 'Only .json files exported from this app are supported.')
     ),
     msg && h('div', {style:{padding:'12px 16px',borderRadius:10,fontWeight:700,fontSize:14,background:msg.ok?'#1e3a28':'#3a1e1e',color:msg.ok?'#70e890':'#e87070',border:'1px solid ' + (msg.ok?'#2a6a3a':'#6a2a2a')}},
       (msg.ok ? '✅' : '❌') + ' ' + msg.text
@@ -2665,9 +2715,43 @@ function App() {
     });
   }
 
-  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedMm, printMode); },menuItems:menuItems};
+  var historyProps = {orders:orders,setOrders:setOrders,clearOrders:function(){ if(window.confirm('Clear history?')) setOrders([]); },onPrint:function(ord){ printReceipt(ord, paperSize, copies, feedMm, printMode); },menuItems:menuItems,
+    /* Recall: copy a past order back into the editable order form. The
+       original stays in history; the user can change anything (including
+       converting to a fresh order via Place Order, or just printing again). */
+    onRecall:function(ord){
+      if (order.length && !window.confirm('Replace the current order with this recalled one?')) return;
+      /* Deep-copy the items so editing the recalled order doesn't mutate history */
+      var copiedItems = JSON.parse(JSON.stringify(ord.items || [])).map(function(it){
+        /* Ensure unique id so quantity-merge logic doesn't combine across recalls */
+        return Object.assign({}, it, {id: (it.custom ? Date.now()+Math.random() : it.id)});
+      });
+      setOrder(copiedItems);
+      setCustomer({
+        name: ord.customer ? (ord.customer.name || '') : '',
+        phone: ord.customer ? (ord.customer.phone || '') : '',
+        address: ord.customer ? (ord.customer.address || '') : '',
+        notes: ord.customer ? (ord.customer.notes || '') : ''
+      });
+      setOrderType(ord.orderType || 'collection');
+      setPaymentType(ord.paymentType || null);
+      setScheduleType(ord.scheduleType || 'asap');
+      setScheduleTime(ord.scheduleTime || '');
+      /* Delivery zone — try to match against existing zones by parsed amount */
+      if (ord.deliveryZone) {
+        var amt = parseCharge(ord.deliveryZone);
+        if (amt > 0) setSelZone(amt.toFixed(2));
+      } else {
+        setSelZone(null);
+      }
+      setDiscount({type:null, pct:10, custom:''});
+      setPriceOverride('');
+      setDiscountPanelOpen(false);
+      setTab(isDesktop ? 'order' : 'menu');
+    }
+  };
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen,onPrintLast:function(){ if(orders.length){ printReceipt(orders[0], paperSize, copies, feedMm, printMode); } },hasLastOrder:orders.length>0};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
