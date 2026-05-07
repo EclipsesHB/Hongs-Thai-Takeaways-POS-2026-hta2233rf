@@ -35,8 +35,10 @@ input,textarea,select{font-family:inherit;-webkit-appearance:none;border-radius:
    Browser localStorage can throw on write — out of quota (e.g. very full
    storage on the tablet), private browsing mode on iOS, etc. Bare setItem
    calls would crash the app. These wrappers fail silently — the worst case
-   is that a setting won't persist, but the app keeps running. Reads are
-   already wrapped in try/catch where parsing is involved. */
+   is that a setting won't persist, but the app keeps running.
+   The read helpers (lsGet, lsGetJson) are provided for completeness; current
+   code uses inline try/catch on existing read paths but new code should
+   prefer these. */
 function lsGet(key, fallback) {
   try { var v = localStorage.getItem(key); return v == null ? fallback : v; }
   catch(e) { return fallback; }
@@ -469,7 +471,11 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       itemLines.push(lineLR(qtyStr + chunks[0], amtStr));
       for (var i = 1; i < chunks.length; i++) itemLines.push(contIndent + chunks[i]);
 
-      if (extraAmt > 0) itemLines.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
+      /* `extra` carries different meanings: for normal items it's an upcharge
+         on top of base price (so we print '+ Extra: £X'); for custom items
+         it's the entire price (already reflected in the line total above), so
+         no separate Extra line is needed. */
+      if (extraAmt > 0 && !item.custom) itemLines.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
       if (item.comment && item.comment.trim()) {
         item.comment.trim().split('\n').forEach(function(l) {
           if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { itemLines.push(w); });
@@ -1602,7 +1608,7 @@ function MenuEditor(props) {
       var toId = dragOverId.current;
       dragState.current = null;
       dragOverId.current = null;
-      if (toId && toId !== ds.fromId) reorderMenuItem(parseInt(ds.fromId), parseInt(toId));
+      if (toId && toId !== ds.fromId) reorderMenuItem(parseInt(ds.fromId, 10), parseInt(toId, 10));
     }
 
     window.addEventListener('touchmove', onMove, {passive: false});
@@ -2079,7 +2085,7 @@ function HistoryView(props) {
     try {
       var parts = dateStr.split('/');
       if (parts.length === 3) {
-        var d = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
+        var d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10)-1, parseInt(parts[0], 10));
         var today = new Date(); today.setHours(0,0,0,0);
         var yesterday = new Date(today); yesterday.setDate(today.getDate()-1);
         d.setHours(0,0,0,0);
