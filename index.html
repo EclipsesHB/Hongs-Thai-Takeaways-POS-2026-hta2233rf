@@ -394,11 +394,18 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         ? String(ord.customer.address).split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
         : [''];
       if (addrParts.length === 0) addrParts = [''];
-      addrParts.forEach(function(p, i) {
-        var prefix = i === 0 ? 'Addr : ' : '       ';
-        var ws = wrapText(p, '');
-        if (ws.length === 0) ws = [''];
-        ws.forEach(function(w, j) { infoLines.push((j === 0 ? prefix : '       ') + w); });
+      /* Pass the 7-space continuation prefix to wrapText so it budgets each
+         wrapped line for the prefix's width — prevents the receipt from being
+         pushed off-center when a long address line would overflow W chars.
+         The first wrapped line already has 7 chars of prefix; we swap those
+         for "Addr : " (also 7 chars). 'Addr : ' is identical width to the
+         indent so the swap doesn't change the line length. */
+      addrParts.forEach(function(p) {
+        var ws = wrapText(p, '       ');
+        if (ws.length === 0) ws = ['       '];
+        ws.forEach(function(w, j) {
+          infoLines.push(j === 0 ? 'Addr : ' + w.slice(7) : w);
+        });
       });
       infoLines.push('');
     }
@@ -500,7 +507,18 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       var summaryLines = [];
       summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
       if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
-      if (discountAmt2 > 0) summaryLines.push(lineLR('Discount', '-\u00a3' + discountAmt2.toFixed(2)));
+      /* Discount label: if it was a percentage discount, show '-10%' instead
+         of '-£1.00'. Falls back to the £ amount for custom (fixed) discounts
+         and for legacy orders that don't have ord.discount preserved. */
+      if (discountAmt2 > 0) {
+        var discLabel;
+        if (ord.discount && ord.discount.type === 'pct' && ord.discount.pct > 0) {
+          discLabel = '-' + ord.discount.pct + '%';
+        } else {
+          discLabel = '-\u00a3' + discountAmt2.toFixed(2);
+        }
+        summaryLines.push(lineLR('Discount', discLabel));
+      }
       summaryLines.push(dashLineWide());
       blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
     } else {
@@ -2633,6 +2651,9 @@ function App() {
       foodTotal: foodTotal,
       deliveryCharge: delCharge,
       discountAmt: discountAmt,
+      /* Save the full discount object so the receipt can show '-10%' for
+         percentage discounts instead of just the calculated amount. */
+      discount: discount,
       deliveryZone: selZone ? '\u00a3' + parseFloat(selZone).toFixed(2) : null,
       total: grand,
       orderType: orderType,
@@ -2671,6 +2692,9 @@ function App() {
       foodTotal: foodTotal,
       deliveryCharge: delCharge,
       discountAmt: discountAmt,
+      /* Save the full discount object so the receipt can show '-10%' for
+         percentage discounts instead of just the calculated amount. */
+      discount: discount,
       deliveryZone: selZone ? '\u00a3' + parseFloat(selZone).toFixed(2) : null,
       total: grand,
       orderType: orderType,
