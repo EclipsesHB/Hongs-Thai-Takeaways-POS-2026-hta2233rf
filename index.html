@@ -270,7 +270,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     lineH      = is58 ? '1.35' : '1.4';
     padTop     = is58 ? '2mm'  : '3mm';
     bigTotalFs = is58 ? '20px' : '24px';
-    bigLetterFs= is58 ? '54px' : '72px';
+    bigLetterFs= is58 ? '48px' : '64px';
     headerNameFs= is58? '18px' : '22px';
     addrFs     = is58 ? '12px' : '14px';
     Wdash      = is58 ? 22     : 28;
@@ -417,7 +417,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
             '<td style="vertical-align:top;padding:0;">' +
               '<pre>' + escHtml(infoLines.join('\n')) + '</pre>' +
             '</td>' +
-            '<td style="vertical-align:top;padding:0;width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
+            '<td style="vertical-align:top;padding:0 3px 0 0;width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
               bigLetter +
             '</td>' +
           '</tr>' +
@@ -488,7 +488,12 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
           if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { itemLines.push(w); });
         });
       }
-      itemLines.push('');
+      /* Inter-item gap. On Bluetooth the service can drop pure-blank lines when
+         its buffer stalls mid-job on a large order, collapsing two items onto
+         one another. A single-space line is treated as real content and isn't
+         stripped, so the gap survives. USB renders blank lines reliably, so it
+         keeps the plain empty line. */
+      itemLines.push(isBT ? ' ' : '');
     });
     itemLines.push(dashLineWide());
     blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
@@ -1249,7 +1254,6 @@ function BasketScreen(props) {
   var discountPanelOpen = props.discountPanelOpen; var setDiscountPanelOpen = props.setDiscountPanelOpen;
   var onPrintLast = props.onPrintLast;
   var hasLastOrder = props.hasLastOrder;
-  var cashRound = props.cashRound || '20';
 
   var inp = {
     width:'100%', background:C.bg, border:'1px solid ' + C.border,
@@ -1395,26 +1399,7 @@ function BasketScreen(props) {
             }
           }, t === 'cash' ? '💵 Cash' : '💳 Card');
         })
-      ),
-      /* Cash change hint — appears only when Cash is selected. Rounds the
-         grand total UP to the next multiple of cashRound (default £20) and
-         shows the likely banknote + change due. Helps tell change quickly
-         without doing arithmetic in head. Not on the receipt. */
-      paymentType === 'cash' && grandTotal > 0 && (function(){
-        var round = parseFloat(cashRound) || 20;
-        var paid = Math.ceil(grandTotal / round) * round;
-        if (paid < grandTotal) paid = grandTotal;
-        var change = paid - grandTotal;
-        return h('div', {style:{marginTop:8, padding:'8px 12px', background:C.bg, border:'1px dashed ' + C.border, borderRadius:8, fontSize:12, color:C.dim, display:'flex', justifyContent:'space-between', alignItems:'center'}},
-          /* Left: "Change for £X" (no .00 — whole-pound notes only). Right:
-             just the change amount in accent color. Stays out of the way and
-             quickly readable at a glance. */
-          h('span', null, 'Change for £' + paid.toFixed(0)),
-          h('span', {style:{color: change > 0 ? C.accent : C.dim, fontWeight:700}},
-            change > 0 ? ('£' + change.toFixed(2)) : 'no change'
-          )
-        );
-      })()
+      )
     ),
     /* Items */
     h('div', {style:{marginBottom:12}},
@@ -2492,30 +2477,6 @@ function BackupRestore(props) {
         'Millimetres of paper to feed past the last line. The NETUM tear bar is ~15-20mm past the print head — start at 15mm and adjust. Filler is invisible (non-breaking spaces) so print services can\'t strip it.'
       )
     ),
-    /* Cash change rounding — controls the on-screen change hint when Cash is
-       selected. Doesn't affect the receipt, totals, or any other behaviour. */
-    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udcb5 CASH CHANGE ROUNDING'),
-      h('div', {style:{display:'flex',gap:8}},
-        ['10','20','50'].map(function(n) {
-          var active = props.cashRound === n;
-          return h('button', {
-            key: n, className:'mbtn',
-            onClick: function(){ props.setCashRound(n); },
-            style:{
-              flex:1, padding:'10px 0', borderRadius:9,
-              border:'1px solid ' + (active ? C.accent : C.border),
-              background: active ? C.accentBg : 'transparent',
-              color: active ? C.accent : C.text,
-              fontWeight:700, fontSize:13, cursor:'pointer'
-            }
-          }, '\u00a3' + n);
-        })
-      ),
-      h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
-        'When Cash is selected, the basket shows the change due if the customer paid the next multiple of this amount. \u00a320 fits most takeaway orders.'
-      )
-    ),
     h('div', {style:card},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
       h('button', {className:'mbtn', onClick:doExport, style:{width:'100%',padding:'11px 18px',borderRadius:9,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:C.accent,color:C.bg}}, 'Download Backup File'),
@@ -2596,10 +2557,6 @@ function App() {
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
   var feedMmState = useState(function(){ return localStorage.getItem('hongs_feedmm') || '20'; }); var feedMm = feedMmState[0]; var setFeedMm = feedMmState[1];
-  /* Cash change rounding — what denomination to round up to when calculating
-     the customer's change. Default £20. Used only for the on-screen change
-     hint shown when Cash payment is selected. Doesn't appear on the receipt. */
-  var cashRoundState = useState(function(){ return localStorage.getItem('hongs_cashround') || '20'; }); var cashRound = cashRoundState[0]; var setCashRound = cashRoundState[1];
   var printModeState = useState(function(){ return localStorage.getItem('hongs_printmode') || 'usb'; }); var printMode = printModeState[0]; var setPrintMode = printModeState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
@@ -2623,7 +2580,6 @@ function App() {
   useEffect(function(){ lsSet('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ lsSet('hongs_copies', copies); }, [copies]);
   useEffect(function(){ lsSet('hongs_feedmm', feedMm); }, [feedMm]);
-  useEffect(function(){ lsSet('hongs_cashround', cashRound); }, [cashRound]);
   useEffect(function(){ lsSet('hongs_printmode', printMode); }, [printMode]);
   useEffect(function(){ lsSetJson('hongs_basket_order', order); }, [order]);
   useEffect(function(){ lsSetJson('hongs_basket_customer', customer); }, [customer]);
@@ -2812,7 +2768,7 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode,cashRound:cashRound,setCashRound:setCashRound};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
 
   useEffect(function(){
@@ -2889,7 +2845,7 @@ function App() {
     }
   };
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen,onPrintLast:function(){ if(orders.length){ printReceipt(orders[0], paperSize, copies, feedMm, printMode); } },hasLastOrder:orders.length>0,cashRound:cashRound};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen,onPrintLast:function(){ if(orders.length){ printReceipt(orders[0], paperSize, copies, feedMm, printMode); } },hasLastOrder:orders.length>0};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
