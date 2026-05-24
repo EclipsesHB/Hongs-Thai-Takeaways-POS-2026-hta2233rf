@@ -290,9 +290,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
 
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  var styleTemplate =
+  styleEl.textContent =
     '@media print{' +
-      '@page{size:' + mmSize + ' __PAGEH__;margin:0;}' +
+      '@page{size:' + mmSize + ' auto;margin:0;}' +
       /* Plain block layout. The previous inline-block + text-align:center
          centering trick caused the frame to shrink-wrap to its content,
          ignoring the declared width and breaking layout. margin:0 auto on
@@ -328,10 +328,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       '}' +
       '#receipt-frame .copy-break{page-break-before:always;break-before:page;}' +
     '}';
-  /* Start with 'auto'; replaced with the measured single-copy height after the
-     content is rendered, so each copy fits on exactly one page (kills the 5-page
-     split that caused every seam problem). */
-  styleEl.textContent = styleTemplate.replace('__PAGEH__', 'auto');
 
   function escHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -518,15 +514,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     var safeTotal = parseFloat(ord.total);
     if (isNaN(safeTotal)) safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
     safeTotal = Math.max(0, safeTotal);
-    /* The entire money section — Subtotal/Delivery/Discount, the divider,
-       TOTAL, its divider, and the trailing feed — is assembled into ONE string
-       and pushed as a single page-break-inside:avoid block (below). Previously
-       the summary was a separate block above the TOTAL wrapper, so the print
-       engine inserted a page break between them — that seam is what dropped the
-       Delivery line and divider on large orders (the printer paused right after
-       Subtotal, then resumed past the gap). Keeping the whole section as one
-       unbreakable unit removes every seam in the totals. */
-    var tailHtml = '';
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
     if (showSubtotal) {
       /* Subtotal/Delivery/Discount sits flush between dividers — no padding.
@@ -548,9 +535,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         summaryLines.push(lineLR('Discount', discLabel));
       }
       summaryLines.push(dashLineWide());
-      tailHtml += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
+      blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
     } else {
-      tailHtml += '<pre>' + dashLineWide() + '\n</pre>';
+      blocks.push('<pre>' + dashLineWide() + '\n</pre>');
     }
 
     /* TOTAL line: block element with bigger font.
@@ -559,12 +546,13 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
        column-align with the £ amounts above (it sits flush against the right
        edge of the frame) — but this prevents the overflow/cut-off that occurs
        when a bigger-font monospace line tries to fit into the frame width. */
-    tailHtml +=
+    blocks.push(
       '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
         '<span style="display:inline-block;width:50%;">TOTAL</span>' +
         '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
-      '</div>' +
-      '<pre>' + dashLineWide() + '\n</pre>';
+      '</div>'
+    );
+    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
     /* ── Trailing filler: rows of tiny visible characters that vary slightly.
        Print services strip pure whitespace AND can sometimes optimize away
@@ -579,11 +567,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     for (var fri = 0; fri < fillerRows; fri++) {
       fillerText += fillerChars[fri % fillerChars.length] + '\n';
     }
-    tailHtml += '<pre style="font-size:6px;line-height:6mm;">' + fillerText + '</pre>';
-    /* Push the whole tail (TOTAL + divider + feed) as one block the print
-       engine cannot split across pages, so the feed always stays attached to
-       TOTAL and reaches the printer. */
-    blocks.push('<div style="page-break-inside:avoid;break-inside:avoid;">' + tailHtml + '</div>');
+    blocks.push('<pre style="font-size:6px;line-height:6mm;">' + fillerText + '</pre>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
@@ -612,30 +596,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   /* Force synchronous layout — critical to prevent print-time truncation */
   var _h = frame.offsetHeight; void _h;
   var _h2 = frame.scrollHeight; void _h2;
-
-  /* Kill the multi-page split. The preview was paginating one receipt into 5
-     pages because @page height was 'auto' (the engine caps it and wraps). Every
-     seam between those pages is where the printer paused and mangled/dropped a
-     line. We measure the tallest single copy and set the @page height to it
-     (+ a little slack), so each copy renders on exactly ONE page — no internal
-     seams left to break at. Multi-copy still works: each copy is forced onto
-     its own page by .copy-break, and every page is now tall enough for a whole
-     copy. Falls back to 'auto' if measurement fails, so it can't be worse than
-     before. */
-  try {
-    var copyEls = frame.querySelectorAll('.receipt-copy');
-    var tallestPx = 0;
-    for (var mi = 0; mi < copyEls.length; mi++) {
-      var hpx = copyEls[mi].getBoundingClientRect().height;
-      if (hpx > tallestPx) tallestPx = hpx;
-    }
-    if (tallestPx > 0) {
-      /* px → mm at 96dpi (1mm ≈ 3.7795px), + 8mm slack so nothing clips. */
-      var pageHmm = Math.ceil(tallestPx / 3.7795) + 8;
-      styleEl.textContent = styleTemplate.replace('__PAGEH__', pageHmm + 'mm');
-      void frame.offsetHeight; /* re-flush with the new page height applied */
-    }
-  } catch (e) { /* keep the 'auto' fallback */ }
 
   function firePrint() {
     requestAnimationFrame(function() {
