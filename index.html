@@ -290,9 +290,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
 
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent =
+  var styleTemplate =
     '@media print{' +
-      '@page{size:' + mmSize + ' auto;margin:0;}' +
+      '@page{size:' + mmSize + ' __PAGEH__;margin:0;}' +
       /* Plain block layout. The previous inline-block + text-align:center
          centering trick caused the frame to shrink-wrap to its content,
          ignoring the declared width and breaking layout. margin:0 auto on
@@ -328,6 +328,10 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       '}' +
       '#receipt-frame .copy-break{page-break-before:always;break-before:page;}' +
     '}';
+  /* Start with 'auto'; replaced with the measured single-copy height after the
+     content is rendered, so each copy fits on exactly one page (kills the 5-page
+     split that caused every seam problem). */
+  styleEl.textContent = styleTemplate.replace('__PAGEH__', 'auto');
 
   function escHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -608,6 +612,30 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   /* Force synchronous layout — critical to prevent print-time truncation */
   var _h = frame.offsetHeight; void _h;
   var _h2 = frame.scrollHeight; void _h2;
+
+  /* Kill the multi-page split. The preview was paginating one receipt into 5
+     pages because @page height was 'auto' (the engine caps it and wraps). Every
+     seam between those pages is where the printer paused and mangled/dropped a
+     line. We measure the tallest single copy and set the @page height to it
+     (+ a little slack), so each copy renders on exactly ONE page — no internal
+     seams left to break at. Multi-copy still works: each copy is forced onto
+     its own page by .copy-break, and every page is now tall enough for a whole
+     copy. Falls back to 'auto' if measurement fails, so it can't be worse than
+     before. */
+  try {
+    var copyEls = frame.querySelectorAll('.receipt-copy');
+    var tallestPx = 0;
+    for (var mi = 0; mi < copyEls.length; mi++) {
+      var hpx = copyEls[mi].getBoundingClientRect().height;
+      if (hpx > tallestPx) tallestPx = hpx;
+    }
+    if (tallestPx > 0) {
+      /* px → mm at 96dpi (1mm ≈ 3.7795px), + 8mm slack so nothing clips. */
+      var pageHmm = Math.ceil(tallestPx / 3.7795) + 8;
+      styleEl.textContent = styleTemplate.replace('__PAGEH__', pageHmm + 'mm');
+      void frame.offsetHeight; /* re-flush with the new page height applied */
+    }
+  } catch (e) { /* keep the 'auto' fallback */ }
 
   function firePrint() {
     requestAnimationFrame(function() {
