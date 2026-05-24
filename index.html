@@ -290,9 +290,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
 
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  styleEl.textContent =
+  var styleTemplate =
     '@media print{' +
-      '@page{size:' + mmSize + ' auto;margin:0;}' +
+      '@page{size:' + mmSize + ' __PAGEH__;margin:0;}' +
       /* Plain block layout. The previous inline-block + text-align:center
          centering trick caused the frame to shrink-wrap to its content,
          ignoring the declared width and breaking layout. margin:0 auto on
@@ -328,6 +328,12 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       '}' +
       '#receipt-frame .copy-break{page-break-before:always;break-before:page;}' +
     '}';
+  /* Default to auto until we measure the rendered copy height below. Stored as
+     a template so we can substitute the real per-copy page height once the
+     content is laid out — this keeps each copy on exactly one page so the
+     trailing filler feeds paper instead of spilling into blank extra pages
+     (which the USB service was discarding, losing copies and the tail feed). */
+  styleEl.textContent = styleTemplate.replace('__PAGEH__', 'auto');
 
   function escHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -560,16 +566,8 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
        the character per row, this content is treated as substantive document
        content the service must render in full.
        Each row at 6px font + 6mm line-height = ~6mm of paper feed.
-       The number of rows is controlled by the user's feed setting (mm).
-
-       Large-order tail: on long jobs the USB print service can truncate the
-       very end before the filler fully feeds, leaving TOTAL stuck behind the
-       tear bar. We add extra filler rows in proportion to the item count so a
-       trimmed tail still leaves enough feed to clear the bar. Small orders are
-       unaffected (itemCount-based bonus is 0 below 8 items). */
-    var itemCount = (ord.items && ord.items.length) || 0;
-    var bigOrderBonusRows = itemCount > 8 ? Math.min(8, itemCount - 8) : 0;
-    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 6)) + bigOrderBonusRows;
+       The number of rows is controlled by the user's feed setting (mm). */
+    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 6));
     var fillerChars = ['.', ',', '.', '\u00b7', '.', ',', '.', '\u00b7', '.', ','];
     var fillerText = '';
     for (var fri = 0; fri < fillerRows; fri++) {
@@ -604,6 +602,31 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   /* Force synchronous layout — critical to prevent print-time truncation */
   var _h = frame.offsetHeight; void _h;
   var _h2 = frame.scrollHeight; void _h2;
+
+  /* Pin the printed page height to the tallest single copy (+ small slack) so
+     each copy lands on exactly ONE page. With 'auto' the print engine caps the
+     page height and a tall large-order receipt overflows onto blank extra
+     pages (the 1/5, 2/5… preview); the USB service then discards those pages,
+     losing the trailing feed and extra copies. Measuring the real copy height
+     and setting the @page size to match keeps every copy whole on its own page
+     and the filler feeds paper as intended. Falls back to 'auto' if measuring
+     fails, so behaviour can never be worse than before. */
+  try {
+    var copyEls = frame.querySelectorAll('.receipt-copy');
+    var tallest = 0;
+    for (var mi = 0; mi < copyEls.length; mi++) {
+      var hpx = copyEls[mi].getBoundingClientRect().height;
+      if (hpx > tallest) tallest = hpx;
+    }
+    if (tallest > 0) {
+      /* px → mm at 96dpi (1mm ≈ 3.78px), plus padTop and a few mm slack so
+         nothing clips at the page edge. */
+      var pageHmm = Math.ceil(tallest / 3.7795) + 6;
+      styleEl.textContent = styleTemplate.replace('__PAGEH__', pageHmm + 'mm');
+      /* Re-force layout with the new page height applied. */
+      void frame.offsetHeight;
+    }
+  } catch (e) { /* keep 'auto' fallback already set */ }
 
   function firePrint() {
     requestAnimationFrame(function() {
