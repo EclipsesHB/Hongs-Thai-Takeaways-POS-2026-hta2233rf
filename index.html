@@ -450,16 +450,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       blocks.push('<pre>' + escHtml(payText) + '\n' + dashLineWide() + '\n</pre>');
     }
 
-    /* Items: each item is emitted as its OWN block marked page-break-inside:
-       avoid, instead of one giant <pre> for all items. This print service
-       imposes its own page length and re-paginates the document no matter what
-       @page height we set — so rather than fight it, we control WHERE it cuts.
-       With each item kept intact, the only place a page break can land is in
-       the gap BETWEEN two whole items, which is harmless. This is what stops
-       the mid-item splits, overlaps and mangled lines on large orders.
-       The QTY/ITEM/AMT header and the closing divider are their own blocks. */
-    var noBreak = 'page-break-inside:avoid;break-inside:avoid;';
-    blocks.push('<pre style="' + noBreak + '">' + escHtml(lineLR('QTY  ITEM', 'AMT') + '\n' + dashLineWide()) + '\n</pre>');
+    var itemLines = [lineLR('QTY  ITEM', 'AMT'), dashLineWide()];
     ord.items.forEach(function(item) {
       var extraAmt = parseFloat(item.extra) || 0;
       var amt = item.price * item.qty + extraAmt;
@@ -495,28 +486,27 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       }
       if (chunks.length === 0) chunks = [''];
 
-      /* Build this single item's lines */
-      var oneItem = [];
-      oneItem.push(lineLR(qtyStr + chunks[0], amtStr));
-      for (var i = 1; i < chunks.length; i++) oneItem.push(contIndent + chunks[i]);
+      itemLines.push(lineLR(qtyStr + chunks[0], amtStr));
+      for (var i = 1; i < chunks.length; i++) itemLines.push(contIndent + chunks[i]);
 
       /* `extra` carries different meanings: for normal items it's an upcharge
          on top of base price (so we print '+ Extra: £X'); for custom items
          it's the entire price (already reflected in the line total above), so
          no separate Extra line is needed. */
-      if (extraAmt > 0 && !item.custom) oneItem.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
+      if (extraAmt > 0 && !item.custom) itemLines.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
       if (item.comment && item.comment.trim()) {
         item.comment.trim().split('\n').forEach(function(l) {
-          if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { oneItem.push(w); });
+          if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { itemLines.push(w); });
         });
       }
-      /* Trailing blank line gives the gap between items — and is the only place
-         the engine is allowed to break. Each item (incl. its gap) is one
-         unbreakable block. */
-      oneItem.push('');
-      blocks.push('<pre style="' + noBreak + '">' + escHtml(oneItem.join('\n')) + '\n</pre>');
+      /* Single blank line between items. (Earlier large-order overlap was
+         caused by the receipt paginating across virtual pages, not by dropped
+         spacer lines — that's fixed in the print CSS by suppressing page
+         breaks inside the receipt.) */
+      itemLines.push('');
     });
-    blocks.push('<pre style="' + noBreak + '">' + escHtml(dashLineWide()) + '\n</pre>');
+    itemLines.push(dashLineWide());
+    blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
     var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
@@ -524,15 +514,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     var safeTotal = parseFloat(ord.total);
     if (isNaN(safeTotal)) safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
     safeTotal = Math.max(0, safeTotal);
-    /* The entire money section — Subtotal/Delivery/Discount, the divider,
-       TOTAL, its divider, and the trailing feed — is assembled into ONE string
-       and pushed as a single page-break-inside:avoid block (below). Previously
-       the summary was a separate block above the TOTAL wrapper, so the print
-       engine inserted a page break between them — that seam is what dropped the
-       Delivery line and divider on large orders (the printer paused right after
-       Subtotal, then resumed past the gap). Keeping the whole section as one
-       unbreakable unit removes every seam in the totals. */
-    var tailHtml = '';
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
     if (showSubtotal) {
       /* Subtotal/Delivery/Discount sits flush between dividers — no padding.
@@ -554,9 +535,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         summaryLines.push(lineLR('Discount', discLabel));
       }
       summaryLines.push(dashLineWide());
-      tailHtml += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
+      blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
     } else {
-      tailHtml += '<pre>' + dashLineWide() + '\n</pre>';
+      blocks.push('<pre>' + dashLineWide() + '\n</pre>');
     }
 
     /* TOTAL line: block element with bigger font.
@@ -565,12 +546,13 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
        column-align with the £ amounts above (it sits flush against the right
        edge of the frame) — but this prevents the overflow/cut-off that occurs
        when a bigger-font monospace line tries to fit into the frame width. */
-    tailHtml +=
+    blocks.push(
       '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
         '<span style="display:inline-block;width:50%;">TOTAL</span>' +
         '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
-      '</div>' +
-      '<pre>' + dashLineWide() + '\n</pre>';
+      '</div>'
+    );
+    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
     /* ── Trailing filler: rows of tiny visible characters that vary slightly.
        Print services strip pure whitespace AND can sometimes optimize away
@@ -585,11 +567,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     for (var fri = 0; fri < fillerRows; fri++) {
       fillerText += fillerChars[fri % fillerChars.length] + '\n';
     }
-    tailHtml += '<pre style="font-size:6px;line-height:6mm;">' + fillerText + '</pre>';
-    /* Push the whole tail (TOTAL + divider + feed) as one block the print
-       engine cannot split across pages, so the feed always stays attached to
-       TOTAL and reaches the printer. */
-    blocks.push('<div style="page-break-inside:avoid;break-inside:avoid;">' + tailHtml + '</div>');
+    blocks.push('<pre style="font-size:6px;line-height:6mm;">' + fillerText + '</pre>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
@@ -2789,7 +2767,7 @@ function App() {
       h('span', {style:{fontSize:22}}, '🍜'),
       h('div', null,
         h('div', {style:{fontWeight:800,fontSize:16,color:C.text}}, "Hong's Thai Takeaway"),
-        h('div', {style:{fontSize:10,color:C.muted,letterSpacing:1.5}}, 'POS \u00b7 EVESHAM \u00b7 v2-itemblocks')
+        h('div', {style:{fontSize:10,color:C.muted,letterSpacing:1.5}}, 'POS \u00b7 EVESHAM')
       )
     ),
     h('div', {style:{textAlign:'right'}},
