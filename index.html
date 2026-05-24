@@ -514,6 +514,15 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     var safeTotal = parseFloat(ord.total);
     if (isNaN(safeTotal)) safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
     safeTotal = Math.max(0, safeTotal);
+    /* The entire money section — Subtotal/Delivery/Discount, the divider,
+       TOTAL, its divider, and the trailing feed — is assembled into ONE string
+       and pushed as a single page-break-inside:avoid block (below). Previously
+       the summary was a separate block above the TOTAL wrapper, so the print
+       engine inserted a page break between them — that seam is what dropped the
+       Delivery line and divider on large orders (the printer paused right after
+       Subtotal, then resumed past the gap). Keeping the whole section as one
+       unbreakable unit removes every seam in the totals. */
+    var tailHtml = '';
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
     if (showSubtotal) {
       /* Subtotal/Delivery/Discount sits flush between dividers — no padding.
@@ -535,9 +544,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         summaryLines.push(lineLR('Discount', discLabel));
       }
       summaryLines.push(dashLineWide());
-      blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
+      tailHtml += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
     } else {
-      blocks.push('<pre>' + dashLineWide() + '\n</pre>');
+      tailHtml += '<pre>' + dashLineWide() + '\n</pre>';
     }
 
     /* TOTAL line: block element with bigger font.
@@ -545,15 +554,8 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
        frame width regardless of font size. Trade-off: the price won't perfectly
        column-align with the £ amounts above (it sits flush against the right
        edge of the frame) — but this prevents the overflow/cut-off that occurs
-       when a bigger-font monospace line tries to fit into the frame width.
-
-       TOTAL + its divider + the trailing feed are wrapped in one block with
-       page-break-inside:avoid (pushed below) so the print engine keeps them
-       together. This stops TOTAL from landing as the last printable line on a
-       page with its feed pushed onto a following page that the USB service
-       discards — the cause of TOTAL stopping ~1-2cm short of the tear bar and
-       needing a manual pull on large orders. */
-    var tailHtml =
+       when a bigger-font monospace line tries to fit into the frame width. */
+    tailHtml +=
       '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
         '<span style="display:inline-block;width:50%;">TOTAL</span>' +
         '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
