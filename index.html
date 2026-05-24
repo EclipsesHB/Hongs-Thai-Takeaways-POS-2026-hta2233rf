@@ -560,8 +560,16 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
        the character per row, this content is treated as substantive document
        content the service must render in full.
        Each row at 6px font + 6mm line-height = ~6mm of paper feed.
-       The number of rows is controlled by the user's feed setting (mm). */
-    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 6));
+       The number of rows is controlled by the user's feed setting (mm).
+
+       Large-order tail: on long jobs the USB print service can truncate the
+       very end before the filler fully feeds, leaving TOTAL stuck behind the
+       tear bar. We add extra filler rows in proportion to the item count so a
+       trimmed tail still leaves enough feed to clear the bar. Small orders are
+       unaffected (itemCount-based bonus is 0 below 8 items). */
+    var itemCount = (ord.items && ord.items.length) || 0;
+    var bigOrderBonusRows = itemCount > 8 ? Math.min(8, itemCount - 8) : 0;
+    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 6)) + bigOrderBonusRows;
     var fillerChars = ['.', ',', '.', '\u00b7', '.', ',', '.', '\u00b7', '.', ','];
     var fillerText = '';
     for (var fri = 0; fri < fillerRows; fri++) {
