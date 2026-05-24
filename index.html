@@ -572,72 +572,46 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
 
+  var allHtml = [];
+  for (var ci = 0; ci < numCopies; ci++) {
+    allHtml.push(buildCopyHtml());
+    if (ci < numCopies - 1) {
+      /* Inter-copy gap + page-break:
+         The page-break-before tag tells the print service to treat each copy as
+         a distinct page. This gives the printer's hardware buffer a chance to
+         fully drain between copies, preventing the buffer-overflow overprinting
+         we were seeing on copy 3 of large orders. The dot row provides a small
+         additional physical gap and prevents the service from trimming the break. */
+      allHtml.push('<pre class="copy-break" style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
+    }
+  }
+  /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
+     Each copy ends with its own filler so multi-copy prints don't need a separate
+     trailing block. */
+
+
   var frame = document.getElementById('receipt-frame');
+  frame.innerHTML = allHtml.join('');
 
-  /* renderAndPrint: render `nCopies` into the frame as ONE document and fire a
-     single print job. This is the original behaviour, factored out so it can be
-     called once (BT / single copy) or repeatedly (USB multi-copy). */
-  function renderAndPrint(nCopies) {
-    var allHtml = [];
-    for (var ci = 0; ci < nCopies; ci++) {
-      allHtml.push(buildCopyHtml());
-      if (ci < nCopies - 1) {
-        /* Inter-copy gap + page-break: gives the printer's hardware buffer a
-           chance to drain between copies within a single job. */
-        allHtml.push('<pre class="copy-break" style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
-      }
-    }
-    frame.innerHTML = allHtml.join('');
-    /* Force synchronous layout — critical to prevent print-time truncation */
-    var _h = frame.offsetHeight; void _h;
-    var _h2 = frame.scrollHeight; void _h2;
+  /* Force synchronous layout — critical to prevent print-time truncation */
+  var _h = frame.offsetHeight; void _h;
+  var _h2 = frame.scrollHeight; void _h2;
 
-    function firePrint() {
+  function firePrint() {
+    requestAnimationFrame(function() {
       requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-          setTimeout(function() {
-            try { window.print(); } catch(e) { console.error('print failed', e); }
-          }, 200);
-        });
+        setTimeout(function() {
+          try { window.print(); } catch(e) { console.error('print failed', e); }
+        }, 200);
       });
-    }
-    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
-      document.fonts.ready.then(firePrint, firePrint);
-    } else {
-      setTimeout(firePrint, 100);
-    }
+    });
   }
 
-  /* USB MULTI-COPY: the Looped Labs USB service crashes / drops pages when it
-     receives one large multi-copy document, because the Android print framework
-     paginates it and the service mishandles the extra pages. To get the same
-     one-tap "all copies print on their own" feel as Bluetooth without the
-     crash, we send each copy as its OWN small single-copy job, fired
-     automatically one after another with a drain delay between them. No user
-     interaction between copies — it just prints them in sequence.
-
-     Bluetooth, and any single-copy print, keep the original single-document
-     behaviour untouched (BT handles multi-copy documents fine). */
-  var isUSB = printMode !== 'bluetooth';
-  if (isUSB && numCopies > 1) {
-    /* Delay between copies: enough for the print dialog to dismiss and the
-       service to finish the previous job before the next is queued. Scales a
-       little with order size so very large receipts get extra drain time. */
-    var perCopyDelayMs = 2500 + Math.min(2500, ((ord.items && ord.items.length) || 0) * 120);
-    var copyIndex = 0;
-    function printNextCopy() {
-      renderAndPrint(1);
-      copyIndex++;
-      if (copyIndex < numCopies) {
-        setTimeout(printNextCopy, perCopyDelayMs);
-      }
-    }
-    printNextCopy();
-    return;
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(firePrint, firePrint);
+  } else {
+    setTimeout(firePrint, 100);
   }
-
-  /* BT, or single copy: original one-document behaviour. */
-  renderAndPrint(numCopies);
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
