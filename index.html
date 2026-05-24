@@ -290,9 +290,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
 
   var styleEl = document.getElementById('receipt-print-style');
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
-  var styleTemplate =
+  styleEl.textContent =
     '@media print{' +
-      '@page{size:' + mmSize + ' __PAGEH__;margin:0;}' +
+      '@page{size:' + mmSize + ' auto;margin:0;}' +
       /* Plain block layout. The previous inline-block + text-align:center
          centering trick caused the frame to shrink-wrap to its content,
          ignoring the declared width and breaking layout. margin:0 auto on
@@ -328,12 +328,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       '}' +
       '#receipt-frame .copy-break{page-break-before:always;break-before:page;}' +
     '}';
-  /* Default to auto until we measure the rendered copy height below. Stored as
-     a template so we can substitute the real per-copy page height once the
-     content is laid out — this keeps each copy on exactly one page so the
-     trailing filler feeds paper instead of spilling into blank extra pages
-     (which the USB service was discarding, losing copies and the tail feed). */
-  styleEl.textContent = styleTemplate.replace('__PAGEH__', 'auto');
 
   function escHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -578,71 +572,72 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
 
-  var allHtml = [];
-  for (var ci = 0; ci < numCopies; ci++) {
-    allHtml.push(buildCopyHtml());
-    if (ci < numCopies - 1) {
-      /* Inter-copy gap + page-break:
-         The page-break-before tag tells the print service to treat each copy as
-         a distinct page. This gives the printer's hardware buffer a chance to
-         fully drain between copies, preventing the buffer-overflow overprinting
-         we were seeing on copy 3 of large orders. The dot row provides a small
-         additional physical gap and prevents the service from trimming the break. */
-      allHtml.push('<pre class="copy-break" style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
-    }
-  }
-  /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
-     Each copy ends with its own filler so multi-copy prints don't need a separate
-     trailing block. */
-
-
   var frame = document.getElementById('receipt-frame');
-  frame.innerHTML = allHtml.join('');
 
-  /* Force synchronous layout — critical to prevent print-time truncation */
-  var _h = frame.offsetHeight; void _h;
-  var _h2 = frame.scrollHeight; void _h2;
-
-  /* Pin the printed page height to the tallest single copy (+ small slack) so
-     each copy lands on exactly ONE page. With 'auto' the print engine caps the
-     page height and a tall large-order receipt overflows onto blank extra
-     pages (the 1/5, 2/5… preview); the USB service then discards those pages,
-     losing the trailing feed and extra copies. Measuring the real copy height
-     and setting the @page size to match keeps every copy whole on its own page
-     and the filler feeds paper as intended. Falls back to 'auto' if measuring
-     fails, so behaviour can never be worse than before. */
-  try {
-    var copyEls = frame.querySelectorAll('.receipt-copy');
-    var tallest = 0;
-    for (var mi = 0; mi < copyEls.length; mi++) {
-      var hpx = copyEls[mi].getBoundingClientRect().height;
-      if (hpx > tallest) tallest = hpx;
+  /* renderAndPrint: render `nCopies` into the frame as ONE document and fire a
+     single print job. This is the original behaviour, factored out so it can be
+     called once (BT / single copy) or repeatedly (USB multi-copy). */
+  function renderAndPrint(nCopies) {
+    var allHtml = [];
+    for (var ci = 0; ci < nCopies; ci++) {
+      allHtml.push(buildCopyHtml());
+      if (ci < nCopies - 1) {
+        /* Inter-copy gap + page-break: gives the printer's hardware buffer a
+           chance to drain between copies within a single job. */
+        allHtml.push('<pre class="copy-break" style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
+      }
     }
-    if (tallest > 0) {
-      /* px → mm at 96dpi (1mm ≈ 3.78px), plus padTop and a few mm slack so
-         nothing clips at the page edge. */
-      var pageHmm = Math.ceil(tallest / 3.7795) + 6;
-      styleEl.textContent = styleTemplate.replace('__PAGEH__', pageHmm + 'mm');
-      /* Re-force layout with the new page height applied. */
-      void frame.offsetHeight;
-    }
-  } catch (e) { /* keep 'auto' fallback already set */ }
+    frame.innerHTML = allHtml.join('');
+    /* Force synchronous layout — critical to prevent print-time truncation */
+    var _h = frame.offsetHeight; void _h;
+    var _h2 = frame.scrollHeight; void _h2;
 
-  function firePrint() {
-    requestAnimationFrame(function() {
+    function firePrint() {
       requestAnimationFrame(function() {
-        setTimeout(function() {
-          try { window.print(); } catch(e) { console.error('print failed', e); }
-        }, 200);
+        requestAnimationFrame(function() {
+          setTimeout(function() {
+            try { window.print(); } catch(e) { console.error('print failed', e); }
+          }, 200);
+        });
       });
-    });
+    }
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+      document.fonts.ready.then(firePrint, firePrint);
+    } else {
+      setTimeout(firePrint, 100);
+    }
   }
 
-  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
-    document.fonts.ready.then(firePrint, firePrint);
-  } else {
-    setTimeout(firePrint, 100);
+  /* USB MULTI-COPY: the Looped Labs USB service crashes / drops pages when it
+     receives one large multi-copy document, because the Android print framework
+     paginates it and the service mishandles the extra pages. To get the same
+     one-tap "all copies print on their own" feel as Bluetooth without the
+     crash, we send each copy as its OWN small single-copy job, fired
+     automatically one after another with a drain delay between them. No user
+     interaction between copies — it just prints them in sequence.
+
+     Bluetooth, and any single-copy print, keep the original single-document
+     behaviour untouched (BT handles multi-copy documents fine). */
+  var isUSB = printMode !== 'bluetooth';
+  if (isUSB && numCopies > 1) {
+    /* Delay between copies: enough for the print dialog to dismiss and the
+       service to finish the previous job before the next is queued. Scales a
+       little with order size so very large receipts get extra drain time. */
+    var perCopyDelayMs = 2500 + Math.min(2500, ((ord.items && ord.items.length) || 0) * 120);
+    var copyIndex = 0;
+    function printNextCopy() {
+      renderAndPrint(1);
+      copyIndex++;
+      if (copyIndex < numCopies) {
+        setTimeout(printNextCopy, perCopyDelayMs);
+      }
+    }
+    printNextCopy();
+    return;
   }
+
+  /* BT, or single copy: original one-document behaviour. */
+  renderAndPrint(numCopies);
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
