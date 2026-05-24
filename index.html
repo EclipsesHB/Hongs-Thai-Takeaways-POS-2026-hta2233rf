@@ -270,7 +270,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     lineH      = is58 ? '1.35' : '1.4';
     padTop     = is58 ? '2mm'  : '3mm';
     bigTotalFs = is58 ? '20px' : '24px';
-    bigLetterFs= is58 ? '48px' : '64px';
+    bigLetterFs= is58 ? '44px' : '56px';
     headerNameFs= is58? '18px' : '22px';
     addrFs     = is58 ? '12px' : '14px';
     Wdash      = is58 ? 22     : 28;
@@ -313,9 +313,20 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
         'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
       '}' +
-      /* Keep each receipt copy on a single page — prevents preview/print engine
-         from splitting a tall receipt across pages and shifting layout. */
-      '#receipt-frame .receipt-copy{page-break-inside:avoid;break-inside:avoid;}' +
+      /* Thermal receipts must print as ONE continuous strip — there are no
+         physical pages. The earlier 'page-break-inside:avoid' backfired: when a
+         large order made the receipt taller than one virtual page, the engine
+         could not honour it and broke the receipt across pages anyway, and the
+         Bluetooth service ran those pages together, overlapping the items at
+         each seam. Instead we forbid page breaks inside the receipt and on
+         every child element, so the whole thing stays a single unbroken flow.
+         (Explicit page breaks between multi-copy prints are added separately
+         and are unaffected by this.) */
+      '#receipt-frame, #receipt-frame .receipt-copy, #receipt-frame pre, #receipt-frame div, #receipt-frame table, #receipt-frame tr, #receipt-frame td{' +
+        'page-break-inside:avoid;break-inside:avoid;' +
+        'page-break-before:auto;break-before:auto;' +
+      '}' +
+      '#receipt-frame .copy-break{page-break-before:always;break-before:page;}' +
     '}';
 
   function escHtml(s) {
@@ -417,7 +428,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
             '<td style="vertical-align:top;padding:0;">' +
               '<pre>' + escHtml(infoLines.join('\n')) + '</pre>' +
             '</td>' +
-            '<td style="vertical-align:top;padding:0 3px 0 0;width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
+            '<td style="vertical-align:top;padding:0 8px 0 0;width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
               bigLetter +
             '</td>' +
           '</tr>' +
@@ -488,12 +499,11 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
           if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { itemLines.push(w); });
         });
       }
-      /* Inter-item gap. On Bluetooth the service can drop pure-blank lines when
-         its buffer stalls mid-job on a large order, collapsing two items onto
-         one another. A single-space line is treated as real content and isn't
-         stripped, so the gap survives. USB renders blank lines reliably, so it
-         keeps the plain empty line. */
-      itemLines.push(isBT ? ' ' : '');
+      /* Single blank line between items. (Earlier large-order overlap was
+         caused by the receipt paginating across virtual pages, not by dropped
+         spacer lines — that's fixed in the print CSS by suppressing page
+         breaks inside the receipt.) */
+      itemLines.push('');
     });
     itemLines.push(dashLineWide());
     blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
@@ -572,7 +582,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
          fully drain between copies, preventing the buffer-overflow overprinting
          we were seeing on copy 3 of large orders. The dot row provides a small
          additional physical gap and prevents the service from trimming the break. */
-      allHtml.push('<pre style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
+      allHtml.push('<pre class="copy-break" style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
     }
   }
   /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
