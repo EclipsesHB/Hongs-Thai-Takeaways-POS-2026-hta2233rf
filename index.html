@@ -349,6 +349,16 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'page-break-inside:avoid;break-inside:avoid;' +
         'page-break-before:auto;break-before:auto;' +
       '}' +
+      /* The main items+summary block is intentionally allowed to break across
+         pages LINE BY LINE. A large order makes it taller than one virtual page;
+         forbidding internal breaks (as the blanket rule above does) is then
+         impossible to honour and the engine breaks it at an arbitrary point,
+         overlapping the seam. Allowing internal breaks lets it paginate cleanly
+         between lines with no overlap. Atomic blocks (banner, TOTAL) keep the
+         avoid rule above so they never split mid-content. */
+      '#receipt-frame .receipt-body{' +
+        'page-break-inside:auto;break-inside:auto;' +
+      '}' +
     '}';
 
   function escHtml(s) {
@@ -549,12 +559,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
          breaks inside the receipt.) */
       itemLines.push('');
     });
-    /* NB: no trailing divider here — the divider that separates items from the
-       summary is now part of the summary footer group below, so the whole
-       footer (divider + Subtotal/Delivery/Discount + divider + TOTAL + divider)
-       stays together as one unbreakable unit and the top divider can't be
-       dropped by a page break landing at the bottom of a page. */
-    blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
     var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
@@ -564,19 +568,19 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     safeTotal = Math.max(0, safeTotal);
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
 
-    /* ── Footer group: the leading divider, the Subtotal/Delivery/Discount
-       lines, the divider, the big TOTAL line and the closing divider are all
-       wrapped in ONE container with page-break-inside:avoid. This keeps the
-       whole footer on a single page so a page break can never land between the
-       items and the summary and silently swallow the divider that sits there
-       (the bug where the line above Subtotal vanished). */
-    var footer = '';
-    /* Leading divider (was previously the items block's trailing divider). */
-    footer += '<pre>' + dashLineWide() + '\n</pre>';
+    /* ── Items + summary are emitted as ONE continuous <pre> ──
+       Previously the items text and the summary/total lived in separate element
+       boxes. When the page break fell near the bottom, the engine repositioned
+       the footer box and it OVERLAPPED the last item line at the seam (the
+       "Chicken Satay collides with the divider" bug). A single continuous
+       monospace <pre> has no internal element boxes, so the print engine
+       paginates it cleanly line-by-line with zero overlap, regardless of order
+       size. The leading divider, Subtotal, Delivery and Discount are appended
+       as plain text lines in the SAME <pre>. */
+    itemLines.push(dashLineWide());            // divider between items and summary
     if (showSubtotal) {
-      var summaryLines = [];
-      summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
-      if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
+      itemLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
+      if (deliveryAmt > 0) itemLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
       /* Discount label: percentage shows '-10%'; custom/legacy falls back to £. */
       if (discountAmt2 > 0) {
         var discLabel;
@@ -585,21 +589,23 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         } else {
           discLabel = '-\u00a3' + discountAmt2.toFixed(2);
         }
-        summaryLines.push(lineLR('Discount', discLabel));
+        itemLines.push(lineLR('Discount', discLabel));
       }
-      summaryLines.push(dashLineWide());
-      footer += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
+      itemLines.push(dashLineWide());          // divider before TOTAL
     }
-    /* TOTAL line: 50/50 inline-block split — fits the frame width at any font
-       size and keeps the big amount flush right. */
-    footer += '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
+    blocks.push('<pre class="receipt-body">' + escHtml(itemLines.join('\n')) + '\n</pre>');
+
+    /* TOTAL line + closing divider. These follow a COMPLETE text block, so the
+       boundary is clean — even if a page break lands here, the big TOTAL simply
+       starts at the top of the next page with nothing to overlap. The 50/50
+       inline-block split fits the frame width at any font size. */
+    blocks.push(
+      '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
         '<span style="display:inline-block;width:50%;">TOTAL</span>' +
         '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
-      '</div>';
-    footer += '<pre>' + dashLineWide() + '\n</pre>';
-    /* The inline style mirrors the print-CSS page-break rules so the avoid
-       behaviour holds even if a service ignores the stylesheet selector. */
-    blocks.push('<div class="receipt-footer" style="page-break-inside:avoid;break-inside:avoid;">' + footer + '</div>');
+      '</div>'
+    );
+    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
