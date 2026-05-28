@@ -315,11 +315,16 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
   styleEl.textContent =
     '@media print{' +
-      '@page{size:' + mmSize + ' auto;margin:0;}' +
-      /* Plain block layout. The previous inline-block + text-align:center
-         centering trick caused the frame to shrink-wrap to its content,
-         ignoring the declared width and breaking layout. margin:0 auto on
-         a block element with explicit width is the simple, correct centering. */
+      /* ONE tall page — the definitive fix for every page-seam bug.
+         Every previous overlap / dropped-line / missing-TOTAL problem was caused
+         by the receipt paginating across more than one page: the print service
+         mangles whichever lines land at the page boundary. By giving the page a
+         height far larger than any possible order (4000mm), the entire receipt
+         renders on a SINGLE page — there is no boundary, so nothing can be
+         dropped or overlapped, regardless of order size. Thermal print services
+         advance paper only for actual rendered content + the trailing feed, so
+         the large page height does NOT waste paper. */
+      '@page{size:' + (is58 ? '58mm' : '80mm') + ' 4000mm;margin:0;}' +
       '#receipt-frame{' +
         'font-family:"Courier New",Courier,monospace;' +
         'font-size:' + fontSize + ';' +
@@ -336,28 +341,13 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
         'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
       '}' +
-      /* Thermal receipts must print as ONE continuous strip — there are no
-         physical pages. The earlier 'page-break-inside:avoid' backfired: when a
-         large order made the receipt taller than one virtual page, the engine
-         could not honour it and broke the receipt across pages anyway, and the
-         Bluetooth service ran those pages together, overlapping the items at
-         each seam. Instead we forbid page breaks inside the receipt and on
-         every child element, so the whole thing stays a single unbroken flow.
-         (Explicit page breaks between multi-copy prints are added separately
-         and are unaffected by this.) */
-      '#receipt-frame, #receipt-frame .receipt-copy, #receipt-frame pre, #receipt-frame div, #receipt-frame table, #receipt-frame tr, #receipt-frame td{' +
+      /* Belt-and-braces: forbid breaks everywhere so that even if a print engine
+         imposes its own shorter page, it still won't split any element. Combined
+         with the 4000mm page above, the receipt stays one unbroken strip. */
+      '#receipt-frame, #receipt-frame *{' +
         'page-break-inside:avoid;break-inside:avoid;' +
-        'page-break-before:auto;break-before:auto;' +
-      '}' +
-      /* The main items+summary block is intentionally allowed to break across
-         pages LINE BY LINE. A large order makes it taller than one virtual page;
-         forbidding internal breaks (as the blanket rule above does) is then
-         impossible to honour and the engine breaks it at an arbitrary point,
-         overlapping the seam. Allowing internal breaks lets it paginate cleanly
-         between lines with no overlap. Atomic blocks (banner, TOTAL) keep the
-         avoid rule above so they never split mid-content. */
-      '#receipt-frame .receipt-body{' +
-        'page-break-inside:auto;break-inside:auto;' +
+        'page-break-before:avoid;break-before:avoid;' +
+        'page-break-after:avoid;break-after:avoid;' +
       '}' +
     '}';
 
