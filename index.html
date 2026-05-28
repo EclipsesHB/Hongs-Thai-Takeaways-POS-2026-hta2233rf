@@ -239,10 +239,33 @@ var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','
    - Layout is force-flushed before window.print() to guarantee the print
      service captures the full DOM.
 ─────────────────────────────────────────────────────────────────────────── */
+/* Guards against two print sequences running at once (e.g. tapping Print Last
+   while a multi-copy job is still going). Overlapping sequences would fight
+   over the shared receipt frame and corrupt each other.
+   A new request while busy is deferred and retried; a hard safety timer always
+   clears the flag so it can never get permanently stuck. */
+var _printBusy = false;
+var _printBusyTimer = null;
+
 function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   var numCopies = parseInt(copies, 10) || 1;
   var trailingFeedMm = parseInt(feedMm, 10);
   if (isNaN(trailingFeedMm)) trailingFeedMm = 20;
+
+  if (_printBusy) {
+    /* A print is already running — retry shortly. Single-threaded JS means
+       only one caller can hold the flag, so this can't interleave. */
+    setTimeout(function(){ printReceipt(ord, paperSize, copies, feedMm, printMode); }, 600);
+    return;
+  }
+  _printBusy = true;
+  function clearBusy() {
+    _printBusy = false;
+    if (_printBusyTimer) { clearTimeout(_printBusyTimer); _printBusyTimer = null; }
+  }
+  /* Hard safety net: clear the busy flag no matter what, after a generous
+     window scaled to the copy count, so a missed callback can never wedge it. */
+  _printBusyTimer = setTimeout(function(){ _printBusy = false; _printBusyTimer = null; }, 8000);
 
   var is58 = paperSize === '58';
   /* Two render profiles that differ in width/font sizing:
@@ -326,7 +349,6 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'page-break-inside:avoid;break-inside:avoid;' +
         'page-break-before:auto;break-before:auto;' +
       '}' +
-      '#receipt-frame .copy-break{page-break-before:always;break-before:page;}' +
     '}';
 
   function escHtml(s) {
@@ -554,46 +576,42 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     );
     blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
-    /* ── Trailing filler: rows of tiny visible characters that vary slightly.
-       Print services strip pure whitespace AND can sometimes optimize away
-       repeating "decorative" patterns at the end of long documents. By varying
-       the character per row, this content is treated as substantive document
-       content the service must render in full.
-       Each row at 6px font + 6mm line-height = ~6mm of paper feed.
-       The number of rows is controlled by the user's feed setting (mm). */
-    var fillerRows = Math.max(2, Math.ceil(trailingFeedMm / 6));
-    var fillerChars = ['.', ',', '.', '\u00b7', '.', ',', '.', '\u00b7', '.', ','];
-    var fillerText = '';
-    for (var fri = 0; fri < fillerRows; fri++) {
-      fillerText += fillerChars[fri % fillerChars.length] + '\n';
-    }
-    blocks.push('<pre style="font-size:6px;line-height:6mm;">' + fillerText + '</pre>');
-
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
 
+  /* ── Trailing feed, emitted as a sibling AFTER the receipt copy (never inside
+     it, so the copy's layout box can't clip it). Uses readable-height lines
+     with a visible character per row: print services strip pure whitespace and
+     can collapse near-zero-height elements, so each row carries a real glyph at
+     a real line-height the service must feed. Rows scale with the user's mm
+     setting, with a safe floor so the last line (TOTAL) always clears the tear
+     bar even on large orders. ~5mm per row. */
+  function buildFeedHtml() {
+    var rows = Math.max(5, Math.ceil(trailingFeedMm / 5));
+    var glyphs = ['.', ',', '\u00b7', '.', ',', '\u00b7'];
+    var s = '';
+    for (var i = 0; i < rows; i++) s += glyphs[i % glyphs.length] + '\n';
+    return '<pre style="font-size:9px;line-height:5mm;margin:0;padding:0;">' + s + '</pre>';
+  }
+
+  var frame = document.getElementById('receipt-frame');
+
+  /* Build ALL copies into ONE continuous document and print it with a SINGLE
+     window.print() — so the user sees the print preview exactly once per press,
+     never once per copy.
+     Copies are separated by a feed gap, NOT a page break. The USB print service
+     crashed on the old multi-PAGE document (explicit page breaks between copies);
+     a single continuous strip prints reliably — it's the same shape as a large
+     single-copy order, which already prints fine. Each copy keeps its own
+     trailing feed so there's tear-off space between them and after the last. */
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
-    if (ci < numCopies - 1) {
-      /* Inter-copy gap + page-break:
-         The page-break-before tag tells the print service to treat each copy as
-         a distinct page. This gives the printer's hardware buffer a chance to
-         fully drain between copies, preventing the buffer-overflow overprinting
-         we were seeing on copy 3 of large orders. The dot row provides a small
-         additional physical gap and prevents the service from trimming the break. */
-      allHtml.push('<pre class="copy-break" style="margin:0;padding:0;font-size:6px;line-height:6mm;page-break-before:always;break-before:page;">.\n</pre>');
-    }
+    allHtml.push(buildFeedHtml());
   }
-  /* Trailing feed is now generated per-copy inside buildCopyHtml() — see fillerRows.
-     Each copy ends with its own filler so multi-copy prints don't need a separate
-     trailing block. */
-
-
-  var frame = document.getElementById('receipt-frame');
   frame.innerHTML = allHtml.join('');
 
-  /* Force synchronous layout — critical to prevent print-time truncation */
+  /* Force synchronous layout so the print snapshot is never truncated. */
   var _h = frame.offsetHeight; void _h;
   var _h2 = frame.scrollHeight; void _h2;
 
@@ -602,6 +620,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       requestAnimationFrame(function() {
         setTimeout(function() {
           try { window.print(); } catch(e) { console.error('print failed', e); }
+          clearBusy();
         }, 200);
       });
     });
