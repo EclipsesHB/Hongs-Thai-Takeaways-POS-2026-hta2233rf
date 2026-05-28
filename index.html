@@ -593,19 +593,18 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       }
       itemLines.push(dashLineWide());          // divider before TOTAL
     }
+    /* TOTAL and the closing divider are part of the SAME continuous text block
+       as the items and summary. Earlier the TOTAL was a separate big-font <div>;
+       the print engine (which ignores @page auto height and paginates) pushed
+       that div onto a 2nd page, and when the paper strip was cut at the page
+       boundary the TOTAL didn't print at all. Keeping it as a plain text line in
+       the one continuous <pre> guarantees it always prints — text paginates
+       line-by-line and never drops a line at a break. A blank line above sets it
+       apart and the amount is right-aligned like the other money lines. */
+    itemLines.push('');
+    itemLines.push(lineLR('TOTAL', '\u00a3' + safeTotal.toFixed(2)));
+    itemLines.push(dashLineWide());
     blocks.push('<pre class="receipt-body">' + escHtml(itemLines.join('\n')) + '\n</pre>');
-
-    /* TOTAL line + closing divider. These follow a COMPLETE text block, so the
-       boundary is clean — even if a page break lands here, the big TOTAL simply
-       starts at the top of the next page with nothing to overlap. The 50/50
-       inline-block split fits the frame width at any font size. */
-    blocks.push(
-      '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
-        '<span style="display:inline-block;width:50%;">TOTAL</span>' +
-        '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
-      '</div>'
-    );
-    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
