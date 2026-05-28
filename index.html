@@ -315,16 +315,11 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
   styleEl.textContent =
     '@media print{' +
-      /* ONE tall page — the definitive fix for every page-seam bug.
-         Every previous overlap / dropped-line / missing-TOTAL problem was caused
-         by the receipt paginating across more than one page: the print service
-         mangles whichever lines land at the page boundary. By giving the page a
-         height far larger than any possible order (4000mm), the entire receipt
-         renders on a SINGLE page — there is no boundary, so nothing can be
-         dropped or overlapped, regardless of order size. Thermal print services
-         advance paper only for actual rendered content + the trailing feed, so
-         the large page height does NOT waste paper. */
-      '@page{size:' + (is58 ? '58mm' : '80mm') + ' 4000mm;margin:0;}' +
+      '@page{size:' + mmSize + ' auto;margin:0;}' +
+      /* Plain block layout. The previous inline-block + text-align:center
+         centering trick caused the frame to shrink-wrap to its content,
+         ignoring the declared width and breaking layout. margin:0 auto on
+         a block element with explicit width is the simple, correct centering. */
       '#receipt-frame{' +
         'font-family:"Courier New",Courier,monospace;' +
         'font-size:' + fontSize + ';' +
@@ -341,13 +336,18 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
         'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
       '}' +
-      /* Belt-and-braces: forbid breaks everywhere so that even if a print engine
-         imposes its own shorter page, it still won't split any element. Combined
-         with the 4000mm page above, the receipt stays one unbroken strip. */
-      '#receipt-frame, #receipt-frame *{' +
+      /* Thermal receipts must print as ONE continuous strip — there are no
+         physical pages. The earlier 'page-break-inside:avoid' backfired: when a
+         large order made the receipt taller than one virtual page, the engine
+         could not honour it and broke the receipt across pages anyway, and the
+         Bluetooth service ran those pages together, overlapping the items at
+         each seam. Instead we forbid page breaks inside the receipt and on
+         every child element, so the whole thing stays a single unbroken flow.
+         (Explicit page breaks between multi-copy prints are added separately
+         and are unaffected by this.) */
+      '#receipt-frame, #receipt-frame .receipt-copy, #receipt-frame pre, #receipt-frame div, #receipt-frame table, #receipt-frame tr, #receipt-frame td{' +
         'page-break-inside:avoid;break-inside:avoid;' +
-        'page-break-before:avoid;break-before:avoid;' +
-        'page-break-after:avoid;break-after:avoid;' +
+        'page-break-before:auto;break-before:auto;' +
       '}' +
     '}';
 
@@ -549,6 +549,12 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
          breaks inside the receipt.) */
       itemLines.push('');
     });
+    /* NB: no trailing divider here — the divider that separates items from the
+       summary is now part of the summary footer group below, so the whole
+       footer (divider + Subtotal/Delivery/Discount + divider + TOTAL + divider)
+       stays together as one unbreakable unit and the top divider can't be
+       dropped by a page break landing at the bottom of a page. */
+    blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
     var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
@@ -558,19 +564,19 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     safeTotal = Math.max(0, safeTotal);
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
 
-    /* ── Items + summary are emitted as ONE continuous <pre> ──
-       Previously the items text and the summary/total lived in separate element
-       boxes. When the page break fell near the bottom, the engine repositioned
-       the footer box and it OVERLAPPED the last item line at the seam (the
-       "Chicken Satay collides with the divider" bug). A single continuous
-       monospace <pre> has no internal element boxes, so the print engine
-       paginates it cleanly line-by-line with zero overlap, regardless of order
-       size. The leading divider, Subtotal, Delivery and Discount are appended
-       as plain text lines in the SAME <pre>. */
-    itemLines.push(dashLineWide());            // divider between items and summary
+    /* ── Footer group: the leading divider, the Subtotal/Delivery/Discount
+       lines, the divider, the big TOTAL line and the closing divider are all
+       wrapped in ONE container with page-break-inside:avoid. This keeps the
+       whole footer on a single page so a page break can never land between the
+       items and the summary and silently swallow the divider that sits there
+       (the bug where the line above Subtotal vanished). */
+    var footer = '';
+    /* Leading divider (was previously the items block's trailing divider). */
+    footer += '<pre>' + dashLineWide() + '\n</pre>';
     if (showSubtotal) {
-      itemLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
-      if (deliveryAmt > 0) itemLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
+      var summaryLines = [];
+      summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
+      if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
       /* Discount label: percentage shows '-10%'; custom/legacy falls back to £. */
       if (discountAmt2 > 0) {
         var discLabel;
@@ -579,22 +585,21 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         } else {
           discLabel = '-\u00a3' + discountAmt2.toFixed(2);
         }
-        itemLines.push(lineLR('Discount', discLabel));
+        summaryLines.push(lineLR('Discount', discLabel));
       }
-      itemLines.push(dashLineWide());          // divider before TOTAL
+      summaryLines.push(dashLineWide());
+      footer += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
     }
-    /* TOTAL and the closing divider are part of the SAME continuous text block
-       as the items and summary. Earlier the TOTAL was a separate big-font <div>;
-       the print engine (which ignores @page auto height and paginates) pushed
-       that div onto a 2nd page, and when the paper strip was cut at the page
-       boundary the TOTAL didn't print at all. Keeping it as a plain text line in
-       the one continuous <pre> guarantees it always prints — text paginates
-       line-by-line and never drops a line at a break. A blank line above sets it
-       apart and the amount is right-aligned like the other money lines. */
-    itemLines.push('');
-    itemLines.push(lineLR('TOTAL', '\u00a3' + safeTotal.toFixed(2)));
-    itemLines.push(dashLineWide());
-    blocks.push('<pre class="receipt-body">' + escHtml(itemLines.join('\n')) + '\n</pre>');
+    /* TOTAL line: 50/50 inline-block split — fits the frame width at any font
+       size and keeps the big amount flush right. */
+    footer += '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
+        '<span style="display:inline-block;width:50%;">TOTAL</span>' +
+        '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
+      '</div>';
+    footer += '<pre>' + dashLineWide() + '\n</pre>';
+    /* The inline style mirrors the print-CSS page-break rules so the avoid
+       behaviour holds even if a service ignores the stylesheet selector. */
+    blocks.push('<div class="receipt-footer" style="page-break-inside:avoid;break-inside:avoid;">' + footer + '</div>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
