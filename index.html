@@ -420,15 +420,15 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       });
       infoLines.push('');
     }
-    var bigLetterCellW = is58 ? '36px' : '46px';
+    var bigLetterCellW = is58 ? '40px' : '52px';
     blocks.push(
       '<div style="margin-top:4px;">' +
-        '<table style="width:100%;border-collapse:collapse;border:0;">' +
+        '<table style="width:100%;border-collapse:collapse;border:0;table-layout:fixed;">' +
           '<tr>' +
-            '<td style="vertical-align:top;padding:0;">' +
-              '<pre>' + escHtml(infoLines.join('\n')) + '</pre>' +
+            '<td style="vertical-align:top;padding:0;word-break:break-word;overflow-wrap:anywhere;">' +
+              '<pre style="white-space:pre-wrap;word-break:break-word;">' + escHtml(infoLines.join('\n')) + '</pre>' +
             '</td>' +
-            '<td style="vertical-align:top;padding:0 8px 0 0;width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
+            '<td style="vertical-align:top;padding:0 10px 0 0;width:' + bigLetterCellW + ';min-width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
               bigLetter +
             '</td>' +
           '</tr>' +
