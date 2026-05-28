@@ -427,14 +427,36 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         ? String(ord.customer.address).split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
         : [''];
       if (addrParts.length === 0) addrParts = [''];
-      /* Pass the 7-space continuation prefix to wrapText so it budgets each
-         wrapped line for the prefix's width — prevents the receipt from being
-         pushed off-center when a long address line would overflow W chars.
-         The first wrapped line already has 7 chars of prefix; we swap those
-         for "Addr : " (also 7 chars). 'Addr : ' is identical width to the
-         indent so the swap doesn't change the line length. */
+      /* Wrap the address to a width that LEAVES ROOM for the big C/D letter that
+         sits in the cell to the right of this text. If we wrap to the full line
+         width, the address column (which is narrower than the paper because of
+         the letter cell) re-wraps it in the browser — producing the double-wrap
+         where the postcode lands on its own line (seen on Bluetooth, whose big
+         font makes the column narrowest). Reserve a few chars; the continuation
+         prefix is 7 chars and the first line's "Addr : " is also 7, so wrapping
+         to Waddr keeps everything within the visible column with no re-wrap. */
+      var addrReserve = isBT ? 8 : 4;
+      var Waddr = W - addrReserve;
+      function wrapAddr(p, prefix) {
+        var lines = [];
+        var words = String(p == null ? '' : p).split(/\s+/).filter(Boolean);
+        if (words.length === 0) return [prefix];
+        var cur = prefix, first = true;
+        words.forEach(function(wd) {
+          while (wd.length > Waddr - prefix.length) {
+            if (cur.length > prefix.length) { lines.push(cur); cur = prefix; }
+            lines.push(prefix + wd.slice(0, Waddr - prefix.length));
+            wd = wd.slice(Waddr - prefix.length);
+          }
+          var attempt = first ? cur + wd : cur + ' ' + wd;
+          if (attempt.length <= Waddr) { cur = attempt; first = false; }
+          else { lines.push(cur); cur = prefix + wd; first = false; }
+        });
+        if (cur.length > 0) lines.push(cur);
+        return lines;
+      }
       addrParts.forEach(function(p) {
-        var ws = wrapText(p, '       ');
+        var ws = wrapAddr(p, '       ');
         if (ws.length === 0) ws = ['       '];
         ws.forEach(function(w, j) {
           infoLines.push(j === 0 ? 'Addr : ' + w.slice(7) : w);
@@ -447,8 +469,8 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       '<div style="margin-top:4px;">' +
         '<table style="width:100%;border-collapse:collapse;border:0;table-layout:fixed;">' +
           '<tr>' +
-            '<td style="vertical-align:top;padding:0;word-break:break-word;overflow-wrap:anywhere;">' +
-              '<pre style="white-space:pre-wrap;word-break:break-word;">' + escHtml(infoLines.join('\n')) + '</pre>' +
+            '<td style="vertical-align:top;padding:0;">' +
+              '<pre style="white-space:pre;">' + escHtml(infoLines.join('\n')) + '</pre>' +
             '</td>' +
             '<td style="vertical-align:top;padding:0 10px 0 0;width:' + bigLetterCellW + ';min-width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
               bigLetter +
@@ -527,7 +549,11 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
          breaks inside the receipt.) */
       itemLines.push('');
     });
-    itemLines.push(dashLineWide());
+    /* NB: no trailing divider here — the divider that separates items from the
+       summary is now part of the summary footer group below, so the whole
+       footer (divider + Subtotal/Delivery/Discount + divider + TOTAL + divider)
+       stays together as one unbreakable unit and the top divider can't be
+       dropped by a page break landing at the bottom of a page. */
     blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
@@ -537,16 +563,21 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     if (isNaN(safeTotal)) safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
     safeTotal = Math.max(0, safeTotal);
     var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
+
+    /* ── Footer group: the leading divider, the Subtotal/Delivery/Discount
+       lines, the divider, the big TOTAL line and the closing divider are all
+       wrapped in ONE container with page-break-inside:avoid. This keeps the
+       whole footer on a single page so a page break can never land between the
+       items and the summary and silently swallow the divider that sits there
+       (the bug where the line above Subtotal vanished). */
+    var footer = '';
+    /* Leading divider (was previously the items block's trailing divider). */
+    footer += '<pre>' + dashLineWide() + '\n</pre>';
     if (showSubtotal) {
-      /* Subtotal/Delivery/Discount sits flush between dividers — no padding.
-         Avoids asymmetric-spacing pitfalls when blank-line padding interacts
-         with cross-block render gaps differently on USB vs Bluetooth services. */
       var summaryLines = [];
       summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
       if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
-      /* Discount label: if it was a percentage discount, show '-10%' instead
-         of '-£1.00'. Falls back to the £ amount for custom (fixed) discounts
-         and for legacy orders that don't have ord.discount preserved. */
+      /* Discount label: percentage shows '-10%'; custom/legacy falls back to £. */
       if (discountAmt2 > 0) {
         var discLabel;
         if (ord.discount && ord.discount.type === 'pct' && ord.discount.pct > 0) {
@@ -557,24 +588,18 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         summaryLines.push(lineLR('Discount', discLabel));
       }
       summaryLines.push(dashLineWide());
-      blocks.push('<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>');
-    } else {
-      blocks.push('<pre>' + dashLineWide() + '\n</pre>');
+      footer += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
     }
-
-    /* TOTAL line: block element with bigger font.
-       Uses inline-block 50/50 split which is guaranteed to fit within the
-       frame width regardless of font size. Trade-off: the price won't perfectly
-       column-align with the £ amounts above (it sits flush against the right
-       edge of the frame) — but this prevents the overflow/cut-off that occurs
-       when a bigger-font monospace line tries to fit into the frame width. */
-    blocks.push(
-      '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
+    /* TOTAL line: 50/50 inline-block split — fits the frame width at any font
+       size and keeps the big amount flush right. */
+    footer += '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
         '<span style="display:inline-block;width:50%;">TOTAL</span>' +
         '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
-      '</div>'
-    );
-    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
+      '</div>';
+    footer += '<pre>' + dashLineWide() + '\n</pre>';
+    /* The inline style mirrors the print-CSS page-break rules so the avoid
+       behaviour holds even if a service ignores the stylesheet selector. */
+    blocks.push('<div class="receipt-footer" style="page-break-inside:avoid;break-inside:avoid;">' + footer + '</div>');
 
     return '<div class="receipt-copy">' + blocks.join('') + '</div>';
   }
@@ -1281,6 +1306,7 @@ function BasketScreen(props) {
   var setScheduleTime = props.setScheduleTime;
 
   var discountPanelOpen = props.discountPanelOpen; var setDiscountPanelOpen = props.setDiscountPanelOpen;
+  var cashRound = props.cashRound || '20';
   var onPrintLast = props.onPrintLast;
   var hasLastOrder = props.hasLastOrder;
 
@@ -1428,7 +1454,22 @@ function BasketScreen(props) {
             }
           }, t === 'cash' ? '💵 Cash' : '💳 Card');
         })
-      )
+      ),
+      /* Cash change hint — only when Cash is selected. Rounds the grand total UP
+         to the next multiple of cashRound and shows the change due. On-screen
+         only; never printed. */
+      paymentType === 'cash' && grandTotal > 0 && (function(){
+        var round = parseFloat(cashRound) || 20;
+        var paid = Math.ceil(grandTotal / round) * round;
+        if (paid < grandTotal) paid = grandTotal;
+        var change = paid - grandTotal;
+        return h('div', {style:{marginTop:8, padding:'8px 12px', background:C.bg, border:'1px dashed ' + C.border, borderRadius:8, fontSize:12, color:C.dim, display:'flex', justifyContent:'space-between', alignItems:'center'}},
+          h('span', null, 'Change for £' + paid.toFixed(0)),
+          h('span', {style:{color: change > 0 ? C.accent : C.dim, fontWeight:700}},
+            change > 0 ? ('£' + change.toFixed(2)) : 'no change'
+          )
+        );
+      })()
     ),
     /* Items */
     h('div', {style:{marginBottom:12}},
@@ -2506,6 +2547,30 @@ function BackupRestore(props) {
         'Millimetres of paper to feed past the last line. The NETUM tear bar is ~15-20mm past the print head — start at 15mm and adjust. Filler is invisible (non-breaking spaces) so print services can\'t strip it.'
       )
     ),
+    /* Cash change rounding — controls the on-screen change hint when Cash is
+       selected. Doesn't affect the receipt, totals, or any other behaviour. */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udcb5 CASH CHANGE ROUNDING'),
+      h('div', {style:{display:'flex',gap:8}},
+        ['10','20','50'].map(function(n) {
+          var active = props.cashRound === n;
+          return h('button', {
+            key: n, className:'mbtn',
+            onClick: function(){ props.setCashRound(n); },
+            style:{
+              flex:1, padding:'10px 0', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.text,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, '\u00a3' + n);
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
+        'When Cash is selected, the basket shows the change due if the customer paid the next multiple of this amount. \u00a320 fits most takeaway orders.'
+      )
+    ),
     h('div', {style:card},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
       h('button', {className:'mbtn', onClick:doExport, style:{width:'100%',padding:'11px 18px',borderRadius:9,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:C.accent,color:C.bg}}, 'Download Backup File'),
@@ -2586,6 +2651,9 @@ function App() {
   var paperSizeState = useState(function(){ return localStorage.getItem('hongs_paper') || '58'; }); var paperSize = paperSizeState[0]; var setPaperSize = paperSizeState[1];
   var copiesState = useState(function(){ return localStorage.getItem('hongs_copies') || '1'; }); var copies = copiesState[0]; var setCopies = copiesState[1];
   var feedMmState = useState(function(){ return localStorage.getItem('hongs_feedmm') || '20'; }); var feedMm = feedMmState[0]; var setFeedMm = feedMmState[1];
+  /* Cash change rounding — denomination to round UP to when showing the change
+     hint for a Cash order. Default £20. On-screen only; never on the receipt. */
+  var cashRoundState = useState(function(){ return localStorage.getItem('hongs_cashround') || '20'; }); var cashRound = cashRoundState[0]; var setCashRound = cashRoundState[1];
   var printModeState = useState(function(){ return localStorage.getItem('hongs_printmode') || 'usb'; }); var printMode = printModeState[0]; var setPrintMode = printModeState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
@@ -2609,6 +2677,7 @@ function App() {
   useEffect(function(){ lsSet('hongs_paper', paperSize); }, [paperSize]);
   useEffect(function(){ lsSet('hongs_copies', copies); }, [copies]);
   useEffect(function(){ lsSet('hongs_feedmm', feedMm); }, [feedMm]);
+  useEffect(function(){ lsSet('hongs_cashround', cashRound); }, [cashRound]);
   useEffect(function(){ lsSet('hongs_printmode', printMode); }, [printMode]);
   useEffect(function(){ lsSetJson('hongs_basket_order', order); }, [order]);
   useEffect(function(){ lsSetJson('hongs_basket_customer', customer); }, [customer]);
@@ -2797,7 +2866,7 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode,cashRound:cashRound,setCashRound:setCashRound};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
 
   useEffect(function(){
@@ -2874,7 +2943,7 @@ function App() {
     }
   };
   var menuScreenProps = {menuItems:menuItems,order:order,onAdd:addToOrder,onRemove:function(id){ updateQty(id,-1); },search:search,setSearch:setSearch,activeCat:activeCat,setActiveCat:setActiveCat,catRefs:catRefs,isDesktop:isDesktop};
-  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen,onPrintLast:function(){ if(orders.length){ printReceipt(orders[0], paperSize, copies, feedMm, printMode); } },hasLastOrder:orders.length>0};
+  var basketProps = {order:order,updateQty:updateQty,updateItemComment:updateItemComment,updateItemExtra:updateItemExtra,updateItemName:updateItemName,reorderOrder:reorderOrder,customer:customer,setCustomer:setCustomer,orderType:orderType,setOrderType:setOrderType,selectedZone:selZone,setSelectedZone:setSelZone,foodTotal:foodTotal,deliveryCharge:delCharge,discountAmt:discountAmt,discount:discount,setDiscount:setDiscount,priceOverride:priceOverride,setPriceOverride:setPriceOverride,grandTotal:grand,onSubmit:submit,onQueue:addToQueue,onClearOrder:function(){if(order.length&&window.confirm('Clear the current order?')){setOrder([]);setCustomer({name:'',phone:'',address:'',notes:''});setSelZone(null);setPaymentType(null);setScheduleType('asap');setScheduleTime('');setDiscount({type:null,pct:10,custom:''});setPriceOverride('');setDiscountPanelOpen(false);}},paymentType:paymentType,setPaymentType:setPaymentType,scheduleType:scheduleType,setScheduleType:setScheduleType,scheduleTime:scheduleTime,setScheduleTime:setScheduleTime,queueCount:queue.length,discountPanelOpen:discountPanelOpen,setDiscountPanelOpen:setDiscountPanelOpen,onPrintLast:function(){ if(orders.length){ printReceipt(orders[0], paperSize, copies, feedMm, printMode); } },hasLastOrder:orders.length>0,cashRound:cashRound};
 
   /* ── DESKTOP ── */
   if (isDesktop) {
