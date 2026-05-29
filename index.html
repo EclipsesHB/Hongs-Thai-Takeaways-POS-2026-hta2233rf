@@ -395,12 +395,11 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   function buildCopyHtml() {
     var blocks = [];
 
-    blocks.push('<div style="text-align:center;font-size:' + headerNameFs + ';font-weight:bold;">' + "HONG'S THAI TAKEAWAY" + '</div>');
-    blocks.push('<pre>' + center('01386 423341') + '\n</pre>');
-    blocks.push('<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>');
-    blocks.push('<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>');
-
-    /* Order type + scheduled banner come BEFORE the customer info block */
+    /* Masthead (shop name + phone + address + order-type/timing banner) is ONE
+       block so the page-break padder keeps it together and never strands the
+       shop-name line at the bottom of a page (which the printer then clips).
+       Built as a wrapper div containing the centered name/address divs and the
+       banner <pre>; page-break-inside:avoid keeps it intact. */
     var typeText = ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***';
     var bannerLines = [dashLineWide(), center(typeText), dashLineWide()];
     if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
@@ -410,7 +409,13 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       bannerLines.push(center('*** ASAP ***'));
     }
     bannerLines.push(dashLineWide());
-    blocks.push('<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>');
+    var masthead =
+      '<div style="text-align:center;font-size:' + headerNameFs + ';font-weight:bold;">' + "HONG'S THAI TAKEAWAY" + '</div>' +
+      '<pre>' + center('01386 423341') + '\n</pre>' +
+      '<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>' +
+      '<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>' +
+      '<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>';
+    blocks.push('<div class="receipt-masthead" style="page-break-inside:avoid;break-inside:avoid;">' + masthead + '</div>');
 
     /* Customer info block + big C/D letter */
     var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
@@ -543,7 +548,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       /* Bottom margin gives a clear, consistent gap between items (a bare blank
          line inside the <pre> collapses against the next block). ~6px ≈ one
          blank text line, matching the original spacing. */
-      blocks.push('<pre style="margin:0 0 6px 0;padding:0;">' + escHtml(oneItem.join('\n')) + '</pre>');
+      blocks.push('<pre style="margin:0 0 10px 0;padding:0;">' + escHtml(oneItem.join('\n')) + '</pre>');
     });
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
