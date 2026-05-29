@@ -933,11 +933,15 @@ var ThermalPrinter = (function () {
    space-padding column maths exact. */
 function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   var is58 = paperSize === '58';
-  var W = is58 ? 32 : 48;
-  /* Body text magnification: double-HEIGHT only (GS ! 0x01). Width stays ×1, so
-     the column count is unchanged and amounts never collide with item names.
-     Masthead name, phone/address/postcode and the TOTAL keep their own sizes. */
-  var BODY = 0x01;
+  /* Column budget. 80mm body is now double-WIDTH+height, so each char is twice
+     as wide -> 24 columns (was 48 at single width). 58mm is left at its proven
+     single-width/double-height profile (32 cols). */
+  var W = is58 ? 32 : 24;
+  /* Body text magnification. 80mm: double width AND height (GS ! 0x11) so the
+     text keeps the normal ~1:2 glyph proportion instead of looking tall/thin.
+     58mm: double height only (0x01), unchanged. Masthead name, phone/address/
+     postcode and the TOTAL keep their own sizes. */
+  var BODY = is58 ? 0x01 : 0x11;
   var numCopies = parseInt(copies, 10) || 1;
   var feed = parseInt(feedMm, 10); if (isNaN(feed)) feed = 20;
   var out = [];
@@ -1001,7 +1005,12 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     align(0);
     line('Date : ' + (ord.date||''));
     line('Time : ' + (ord.time||''));
-    line('Name : ' + (ord.customer.name||''));
+    /* Name can exceed the narrower 80mm column; wrap it on word boundaries with
+       a 7-char hang indent so the label stays put and nothing hard-wraps. */
+    var nm = String(ord.customer.name||'');
+    var nameLines = wrap(nm, '       ');
+    if (!nameLines.length) nameLines = ['       '];
+    nameLines.forEach(function(w,i){ line(i===0 ? 'Name : '+w.slice(7) : w); });
     lf();
     line('Tel  : ' + (ord.customer.phone||''));
     lf();
@@ -1068,8 +1077,10 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
       }
       line(dash());
     }
-    /* Big TOTAL — double size, so columns halve; pad against W/2. */
-    var W2=Math.floor(W/2);
+    /* Big TOTAL — double width+height. On 80mm the body is already double-width
+       (W=24 effective double cols), so TOTAL pads against W. On 58mm the body is
+       single width, so the double-width TOTAL spans W/2. */
+    var W2 = is58 ? Math.floor(W/2) : W;
     bold(true); size(0x11);
     var tl='TOTAL', tr=money(safeTotal), g=W2-tl.length-tr.length; if(g<1) g=1;
     line(tl+rep(' ',g)+tr);
