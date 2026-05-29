@@ -540,8 +540,10 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
           if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { oneItem.push(w); });
         });
       }
-      oneItem.push('');   /* trailing blank between items */
-      blocks.push('<pre>' + escHtml(oneItem.join('\n')) + '</pre>');
+      /* Bottom margin gives a clear, consistent gap between items (a bare blank
+         line inside the <pre> collapses against the next block). ~6px ≈ one
+         blank text line, matching the original spacing. */
+      blocks.push('<pre style="margin:0 0 6px 0;padding:0;">' + escHtml(oneItem.join('\n')) + '</pre>');
     });
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
@@ -641,38 +643,59 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       var pagePx = 297 * pxPerMm;               /* matches @page height */
       if (!isFinite(pagePx) || pagePx <= 0) return;
 
-      /* Walk top-level children; if a block crosses a page boundary, pad it to
-         the next page top. We re-measure after each insertion because adding a
-         spacer shifts everything below it. Guard with an iteration cap. */
+      /* Collect the paddable LEAF blocks in document order. Each copy is wrapped
+         in a .receipt-copy div, so we must descend into those (and the feed
+         block) rather than treating the wrapper as one atomic unit — otherwise
+         a tall block inside a copy (e.g. the header) straddles the seam and gets
+         cut. Helper returns the ordered list of blocks we may pad before. */
+      function collectBlocks(parent, out) {
+        var ch = parent.firstChild;
+        while (ch) {
+          if (ch.nodeType === 1) {
+            if (ch.className && String(ch.className).indexOf('receipt-copy') > -1) {
+              collectBlocks(ch, out);   /* descend into a copy wrapper */
+            } else {
+              out.push(ch);
+            }
+          }
+          ch = ch.nextSibling;
+        }
+      }
+
+      /* Pad in passes: after inserting a spacer, positions below shift, so we
+         re-collect and re-scan until no block straddles (or the guard trips). */
       var guard = 0;
-      var frameTop = frame.getBoundingClientRect().top;
-      var node = frame.firstChild;
-      while (node && guard < 400) {
-        guard++;
-        if (node.nodeType !== 1) { node = node.nextSibling; continue; }
-        var r = node.getBoundingClientRect();
-        var top = r.top - frameTop;
-        var bottom = r.bottom - frameTop;
-        var pageOfTop = Math.floor(top / pagePx);
-        var pageOfBottom = Math.floor((bottom - 0.5) / pagePx);
-        /* If this block starts and ends on different pages, it straddles the
-           seam — push it to the next page by padding the gap to the boundary. */
-        if (pageOfBottom > pageOfTop && (bottom - top) < pagePx) {
-          var nextBoundary = (pageOfTop + 1) * pagePx;
-          var gap = nextBoundary - top;
-          if (gap > 0.5) {
-            var spacer = document.createElement('div');
-            spacer.className = 'page-spacer';
-            spacer.style.height = gap + 'px';
-            spacer.style.width = '100%';
-            node.parentNode.insertBefore(spacer, node);
-            /* Re-measure from this spacer onward; continue from the same node
-               (now shifted down to the next page top). */
-            frame.offsetHeight; /* reflow */
-            continue;
+      var changed = true;
+      while (changed && guard < 400) {
+        changed = false;
+        var blocksList = [];
+        collectBlocks(frame, blocksList);
+        var frameTop = frame.getBoundingClientRect().top;
+        for (var bi = 0; bi < blocksList.length; bi++) {
+          guard++;
+          var el = blocksList[bi];
+          var r = el.getBoundingClientRect();
+          var top = r.top - frameTop;
+          var bottom = r.bottom - frameTop;
+          var pageOfTop = Math.floor(top / pagePx);
+          var pageOfBottom = Math.floor((bottom - 0.5) / pagePx);
+          /* Block straddles a page boundary (and is itself shorter than a page):
+             pad the gap so it starts at the next page top. */
+          if (pageOfBottom > pageOfTop && (bottom - top) < pagePx) {
+            var nextBoundary = (pageOfTop + 1) * pagePx;
+            var gap = nextBoundary - top;
+            if (gap > 0.5) {
+              var spacer = document.createElement('div');
+              spacer.className = 'page-spacer';
+              spacer.style.height = gap + 'px';
+              spacer.style.width = '100%';
+              el.parentNode.insertBefore(spacer, el);
+              frame.offsetHeight; /* reflow */
+              changed = true;
+              break;            /* re-collect from the top after the shift */
+            }
           }
         }
-        node = node.nextSibling;
       }
     } catch (e) { /* measurement is best-effort; printing proceeds regardless */ }
   }
