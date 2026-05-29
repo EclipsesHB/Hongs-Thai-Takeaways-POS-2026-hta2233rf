@@ -607,7 +607,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
      setting, with a safe floor so the last line (TOTAL) always clears the tear
      bar even on large orders. ~5mm per row. */
   function buildFeedHtml() {
-    var rows = Math.max(5, Math.ceil(trailingFeedMm / 5));
+    var rows = Math.max(8, Math.ceil(trailingFeedMm / 5));
     var glyphs = ['.', ',', '\u00b7', '.', ',', '\u00b7'];
     var s = '';
     for (var i = 0; i < rows; i++) s += glyphs[i % glyphs.length] + '\n';
@@ -653,7 +653,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
          edge (the "Evesham WR11 1YP" cut-off). Treat that zone as off-limits:
          any block reaching into it is padded to the next page. ~5mm is enough to
          clear the edge while staying visually negligible. */
-      var safetyPx = 5 * pxPerMm;
+      var safetyPx = 12 * pxPerMm;
       var usablePx = pagePx - safetyPx;
 
       /* Collect the paddable LEAF blocks in document order. Each copy is wrapped
