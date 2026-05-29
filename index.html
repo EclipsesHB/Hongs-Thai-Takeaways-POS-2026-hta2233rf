@@ -821,7 +821,10 @@ var ThermalPrinter = (function () {
   /* Auto-open a device surfaced by the USB 'connect' event (fires only for
      printers the user has already authorized). Lets a replug reconnect with no
      click. Skipped if already connected; brief settle delay + one retry covers
-     the moment right after enumeration when the device isn't ready yet. */
+     the moment right after enumeration when the device isn't ready yet.
+     NOTE: on Android the OS revokes USB permission on unplug, so this silent
+     path often can't reopen without a user gesture — ensureConnected() below,
+     called from the print tap, is the reliable route. */
   var _autoBusy = false;
   async function autoOpen(device){
     if (s.connected || _autoBusy) return;
@@ -830,8 +833,21 @@ var ThermalPrinter = (function () {
       await wait(300);
       try { await openUSB(device); }
       catch(e){ await wait(600); if (!s.connected) await openUSB(device); }
-    } catch(e){ /* leave disconnected; manual Connect still works */ }
+    } catch(e){ /* leave disconnected; ensureConnected() on next print covers it */ }
     finally { _autoBusy = false; }
+  }
+  /* Reconnect to an already-authorized printer WITHOUT the device chooser.
+     Must be invoked from within a user gesture (e.g. tapping Print) so Android
+     will re-grant the USB permission it dropped on unplug. Returns true if the
+     printer is connected afterwards. */
+  async function ensureConnected(){
+    if (s.connected) return true;
+    try {
+      if (!window.isSecureContext || !navigator.usb || !navigator.usb.getDevices) return false;
+      var devs = await navigator.usb.getDevices();
+      if (devs && devs.length){ await openUSB(devs[0]); return true; }
+    } catch(e){ /* fall through — caller can open the chooser */ }
+    return s.connected;
   }
 
   /* ---- Web Bluetooth (BLE) ---- */
@@ -905,7 +921,8 @@ var ThermalPrinter = (function () {
   }
 
   return { connect:connect, disconnect:disconnect, write:write, subscribe:subscribe,
-           getStatus:status, isConnected:function(){ return s.connected; }, tryRestoreUSB:tryRestoreUSB };
+           getStatus:status, isConnected:function(){ return s.connected; },
+           ensureConnected:ensureConnected, tryRestoreUSB:tryRestoreUSB };
 })();
 
 /* ── ESC/POS receipt encoder ────────────────────────────────────────────────
@@ -1063,9 +1080,9 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  /* Blank gap between copies so each can be torn off cleanly. ~12mm of plain
+  /* Blank gap between copies so each can be torn off cleanly. ~15mm of plain
      paper feed — no text, no divider line. */
-  var INTER_COPY_DOTS = 96;
+  var INTER_COPY_DOTS = 120;
   for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(INTER_COPY_DOTS); }
   feedDots(feed*8);     /* trailing feed: mm -> dots @203dpi, clears the tear bar */
   lf(); lf();
@@ -1079,16 +1096,22 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
    accepted only for call-site compatibility; the live transport is whatever the
    user connected in Settings. */
 function printReceipt(ord, paperSize, copies, feedMm, printMode) {
-  if (!ThermalPrinter.isConnected()){
-    window.alert('No printer connected.\n\nOpen Settings and tap "Connect Printer" (USB recommended).');
-    return;
-  }
   var bytes;
   try { bytes = buildReceiptBytes(ord, paperSize, copies, feedMm); }
   catch(e){ console.error('receipt build failed', e); window.alert('Could not build receipt: ' + (e && e.message ? e.message : e)); return; }
-  ThermalPrinter.write(bytes).catch(function(e){
-    console.error('print failed', e);
-    window.alert('Print failed: ' + (e && e.message ? e.message : e) + '\n\nReconnect the printer in Settings.');
+  function send(){
+    ThermalPrinter.write(bytes).catch(function(e){
+      console.error('print failed', e);
+      window.alert('Print failed: ' + (e && e.message ? e.message : e) + '\n\nReconnect the printer in Settings.');
+    });
+  }
+  if (ThermalPrinter.isConnected()){ send(); return; }
+  /* Not connected — likely a USB replug (Android drops the permission). This
+     call runs inside the print tap, so Android will re-grant access; reopen the
+     authorized printer silently, then print. Only prompt if that fails. */
+  ThermalPrinter.ensureConnected().then(function(ok){
+    if (ok) send();
+    else window.alert('No printer connected.\n\nOpen Settings and tap "Connect Printer" (USB recommended).');
   });
 }
 
@@ -3261,7 +3284,16 @@ function App() {
     setTab(isDesktop ? 'order' : 'menu');
     setShowOk(true);
     setTimeout(function(){ setShowOk(false); }, 3000);
-    setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedMm, printMode); }, 150);
+    /* Print the new order. If the printer dropped off (USB replug on Android),
+       reconnect first — calling ensureConnected() here keeps it inside the
+       place-order tap so Android re-grants USB access. */
+    if (ThermalPrinter.isConnected()) {
+      setTimeout(function(){ printReceipt(newOrd, paperSize, copies, feedMm, printMode); }, 150);
+    } else {
+      ThermalPrinter.ensureConnected().then(function(){
+        printReceipt(newOrd, paperSize, copies, feedMm, printMode);
+      });
+    }
   }
 
   function addToQueue() {
@@ -3351,6 +3383,30 @@ function App() {
 
   var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode,cashRound:cashRound,setCashRound:setCashRound};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
+
+  /* App-wide printer status so a "Reconnect" pill can appear anywhere when the
+     printer drops (e.g. USB replug), without digging into Settings. */
+  var printerConnState = useState(ThermalPrinter.getStatus()); var printerConn = printerConnState[0]; var setPrinterConn = printerConnState[1];
+  var reconnectingState = useState(false); var reconnecting = reconnectingState[0]; var setReconnecting = reconnectingState[1];
+  useEffect(function(){ return ThermalPrinter.subscribe(setPrinterConn); }, []);
+  /* Runs inside the pill tap, so Android re-grants USB access. Tries the
+     authorized printer first; if none is authorized yet, opens the chooser. */
+  function reconnectPrinter(){
+    if (reconnecting) return;
+    setReconnecting(true);
+    ThermalPrinter.ensureConnected().then(function(ok){
+      if (ok) return true;
+      return ThermalPrinter.connect(printMode).then(function(){ return true; });
+    }).catch(function(){}).then(function(){ setReconnecting(false); });
+  }
+  /* One-tap reconnect, visible from any screen while the printer is offline. */
+  var reconnectPill = !printerConn.connected && h('button', {
+    className:'mbtn', onClick:reconnectPrinter, disabled:reconnecting,
+    style:{position:'fixed',right:14,bottom:14,zIndex:9998,padding:'12px 16px',borderRadius:24,
+      border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:14,
+      boxShadow:'0 4px 16px rgba(0,0,0,0.5)',cursor:'pointer',opacity:reconnecting?0.7:1,
+      display:'flex',alignItems:'center',gap:8}
+  }, reconnecting ? 'Reconnecting\u2026' : '\ud83d\udd0c Reconnect Printer');
 
   useEffect(function(){
     setPrintQueueListener(function(jobs, onDone){
@@ -3471,7 +3527,8 @@ function App() {
           }
         },
         onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
-      })
+      }),
+      reconnectPill
     );
   }
 
@@ -3517,7 +3574,8 @@ function App() {
         }
       },
       onClose: function(){ if(printModal.onDone) printModal.onDone(); setPrintModal(null); }
-    })
+    }),
+    reconnectPill
   );
 }
 
