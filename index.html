@@ -247,7 +247,7 @@ var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','
 var _printBusy = false;
 var _printBusyTimer = null;
 
-function printReceipt(ord, paperSize, copies, feedMm, printMode) {
+function printReceiptHTML(ord, paperSize, copies, feedMm, printMode) {
   var numCopies = parseInt(copies, 10) || 1;
   var trailingFeedMm = parseInt(feedMm, 10);
   if (isNaN(trailingFeedMm)) trailingFeedMm = 20;
@@ -255,7 +255,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   if (_printBusy) {
     /* A print is already running — retry shortly. Single-threaded JS means
        only one caller can hold the flag, so this can't interleave. */
-    setTimeout(function(){ printReceipt(ord, paperSize, copies, feedMm, printMode); }, 600);
+    setTimeout(function(){ printReceiptHTML(ord, paperSize, copies, feedMm, printMode); }, 600);
     return;
   }
   _printBusy = true;
@@ -743,6 +743,328 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   } else {
     setTimeout(firePrint, 100);
   }
+}
+
+/* ── DIRECT THERMAL PRINTING (ESC/POS over WebUSB / Web Bluetooth) ───────────
+   Replaces the Looped Labs / Android print-service path entirely. Raw ESC/POS
+   bytes are streamed straight to the printer's hardware endpoint, so there is
+   no Android print preview and no page-level pagination that could clip a long
+   order. USB is preferred (most reliable); Bluetooth (BLE/GATT) is a fallback.
+   NOTE: Web Bluetooth only reaches BLE printers — receipt printers that expose
+   only classic Bluetooth SPP cannot be reached by any browser; use USB OTG for
+   those (the NT-8003 prints fine over USB).
+─────────────────────────────────────────────────────────────────────────── */
+var ThermalPrinter = (function () {
+  /* Candidate GATT service UUIDs common on cheap ESC/POS BLE printers. They must
+     be listed in optionalServices for getPrimaryServices() to expose them. */
+  var BT_SERVICES = [
+    '000018f0-0000-1000-8000-00805f9b34fb',
+    '0000ff00-0000-1000-8000-00805f9b34fb',
+    '0000ffe0-0000-1000-8000-00805f9b34fb',
+    '0000ae30-0000-1000-8000-00805f9b34fb',
+    '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+    '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+  ];
+  var s = { kind:null, connected:false, name:'', device:null, ep:null, iface:null, ch:null };
+  var subs = [];
+  function status(){ return { connected:s.connected, kind:s.kind, name:s.name }; }
+  function emit(){ subs.forEach(function(f){ try{ f(status()); }catch(e){} }); }
+  function subscribe(fn){ subs.push(fn); try{ fn(status()); }catch(e){} return function(){ subs = subs.filter(function(x){ return x!==fn; }); }; }
+  function reset(){ s.kind=null; s.connected=false; s.name=''; s.device=null; s.ep=null; s.iface=null; s.ch=null; emit(); }
+  function ensureSecure(){ if (!window.isSecureContext) throw new Error('Page must be served over HTTPS (or localhost) for direct printing.'); }
+
+  /* ---- WebUSB ---- */
+  function pickEndpoint(device){
+    var cfg = device.configuration; if (!cfg) return null; var fb=null;
+    for (var i=0;i<cfg.interfaces.length;i++){
+      var iface=cfg.interfaces[i];
+      for (var a=0;a<iface.alternates.length;a++){
+        var alt=iface.alternates[a], out=null;
+        for (var e=0;e<alt.endpoints.length;e++){
+          var ep=alt.endpoints[e];
+          if (ep.direction==='out' && (ep.type==='bulk'||ep.type==='interrupt')){ out=ep.endpointNumber; break; }
+        }
+        if (out!=null){
+          var cand={iface:iface.interfaceNumber, alt:alt.alternateSetting, ep:out};
+          if (alt.interfaceClass===7) return cand;   /* printer class — best match */
+          if (!fb) fb=cand;
+        }
+      }
+    }
+    return fb;
+  }
+  async function openUSB(device){
+    await device.open();
+    if (device.configuration===null) await device.selectConfiguration(1);
+    var c = pickEndpoint(device);
+    if (!c) throw new Error('No USB OUT endpoint found on this device.');
+    try { await device.claimInterface(c.iface); }
+    catch(e){ throw new Error('Could not claim the printer — close any Android print app using it, then retry.'); }
+    if (c.alt!=null){ try { await device.selectAlternateInterface(c.iface, c.alt); } catch(e){} }
+    s.kind='usb'; s.device=device; s.ep=c.ep; s.iface=c.iface; s.connected=true;
+    s.name=device.productName||'USB Printer'; emit();
+  }
+  async function connectUSB(){
+    ensureSecure();
+    if (!navigator.usb) throw new Error('WebUSB not supported — use Chrome on Android.');
+    var device = await navigator.usb.requestDevice({ filters: [] });
+    await openUSB(device);
+    return status();
+  }
+  async function tryRestoreUSB(){
+    try {
+      if (!window.isSecureContext || !navigator.usb || !navigator.usb.getDevices) return;
+      var devs = await navigator.usb.getDevices();
+      if (devs && devs.length) await openUSB(devs[0]);
+    } catch(e){ /* silent — user can connect manually */ }
+  }
+
+  /* ---- Web Bluetooth (BLE) ---- */
+  async function findWriteChar(server){
+    var services=[]; try { services = await server.getPrimaryServices(); } catch(e){ services=[]; }
+    for (var i=0;i<services.length;i++){
+      var chars=[]; try { chars = await services[i].getCharacteristics(); } catch(e){ continue; }
+      for (var j=0;j<chars.length;j++){
+        var p=chars[j].properties;
+        if (p && (p.write || p.writeWithoutResponse)) return chars[j];
+      }
+    }
+    return null;
+  }
+  async function connectBT(){
+    ensureSecure();
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth not supported — use Chrome on Android.');
+    var device = await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices: BT_SERVICES });
+    device.addEventListener('gattserverdisconnected', function(){ if (s.device===device) reset(); });
+    var server = await device.gatt.connect();
+    var ch = await findWriteChar(server);
+    if (!ch){ try{ device.gatt.disconnect(); }catch(e){} throw new Error('No writable characteristic — this printer may use classic Bluetooth (use USB instead).'); }
+    s.kind='bluetooth'; s.device=device; s.ch=ch; s.connected=true; s.name=device.name||'Bluetooth Printer'; emit();
+    return status();
+  }
+
+  function connect(kind){ return kind==='bluetooth' ? connectBT() : connectUSB(); }
+  async function disconnect(){
+    try {
+      if (s.kind==='usb' && s.device){
+        try { if (s.iface!=null) await s.device.releaseInterface(s.iface); } catch(e){}
+        try { await s.device.close(); } catch(e){}
+      } else if (s.kind==='bluetooth' && s.device && s.device.gatt && s.device.gatt.connected){
+        s.device.gatt.disconnect();
+      }
+    } finally { reset(); }
+  }
+
+  /* ---- write (serialized so concurrent jobs never interleave on the bus) ---- */
+  function wait(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  async function doWrite(data){
+    if (!s.connected) throw new Error('Printer not connected.');
+    if (s.kind==='usb'){
+      var CH=4096;
+      for (var o=0;o<data.length;o+=CH){
+        var chunk=data.subarray(o, o+CH);
+        var res=await s.device.transferOut(s.ep, chunk);
+        if (res && res.status==='stall'){ try{ await s.device.clearHalt('out', s.ep); }catch(e){} await s.device.transferOut(s.ep, chunk); }
+      }
+    } else {
+      var c=s.ch, noResp = c.properties && c.properties.writeWithoutResponse && c.writeValueWithoutResponse;
+      var SZ=128;
+      for (var p=0;p<data.length;p+=SZ){
+        var part=data.subarray(p, p+SZ);
+        if (noResp) await c.writeValueWithoutResponse(part); else await c.writeValue(part);
+        await wait(10);   /* pace cheap BLE modules so their buffer can't overrun */
+      }
+    }
+  }
+  var chain = Promise.resolve();
+  function write(bytes){
+    var data = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+    var run = function(){ return doWrite(data); };
+    chain = chain.then(run, run);
+    return chain;
+  }
+
+  if (navigator.usb && navigator.usb.addEventListener) {
+    navigator.usb.addEventListener('disconnect', function(e){ if (s.device && e.device===s.device) reset(); });
+  }
+
+  return { connect:connect, disconnect:disconnect, write:write, subscribe:subscribe,
+           getStatus:status, isConnected:function(){ return s.connected; }, tryRestoreUSB:tryRestoreUSB };
+})();
+
+/* ── ESC/POS receipt encoder ────────────────────────────────────────────────
+   Reproduces the on-paper layout of the old HTML receipt as raw ESC/POS bytes.
+   80mm = 48 columns / 58mm = 32 columns (Font A). Pound signs are emitted as
+   0x9C (CP437 £). Unicode punctuation in item names (em dash, curly quotes…) is
+   folded to ASCII so every character maps to exactly one byte — which keeps the
+   space-padding column maths exact. */
+function buildReceiptBytes(ord, paperSize, copies, feedMm) {
+  var is58 = paperSize === '58';
+  var W = is58 ? 32 : 48;
+  var numCopies = parseInt(copies, 10) || 1;
+  var feed = parseInt(feedMm, 10); if (isNaN(feed)) feed = 20;
+  var out = [];
+
+  function enc(ch){
+    var code = ch.charCodeAt(0);
+    if (code === 0x00A3) return 0x9C;                 /* £ */
+    if (code < 0x80) return code;                     /* ASCII */
+    var map = {0x2014:0x2D,0x2013:0x2D,0x2018:0x27,0x2019:0x27,0x201C:0x22,0x201D:0x22,0x2026:0x2E,0x00B7:0x2D,0x00A0:0x20,0x20AC:0x9C};
+    return map[code] != null ? map[code] : 0x3F;      /* unknown -> '?' */
+  }
+  function txt(str){ str=String(str==null?'':str); for (var i=0;i<str.length;i++) out.push(enc(str[i])); }
+  function raw(){ for (var i=0;i<arguments.length;i++) out.push(arguments[i] & 0xFF); }
+  function lf(){ out.push(0x0A); }
+  function line(str){ txt(str); lf(); }
+  function align(n){ raw(0x1B,0x61,n); }              /* 0 left, 1 centre, 2 right */
+  function bold(on){ raw(0x1B,0x45, on?1:0); }
+  function size(n){ raw(0x1D,0x21,n); }               /* GS ! n  (0x11 = double w+h) */
+  function feedDots(d){ d=Math.max(0,Math.round(d)); while(d>0){ var n=Math.min(255,d); raw(0x1B,0x4A,n); d-=n; } }
+  function rep(c,n){ var x=''; for (var i=0;i<n;i++) x+=c; return x; }
+  function dash(){ return rep('-', W); }
+  function lr(l,r){ l=String(l); r=String(r); var g=W-l.length-r.length; if(g<1) g=1; return l+rep(' ',g)+r; }
+  function money(n){ return '\u00A3'+(parseFloat(n)||0).toFixed(2); }
+  function wrap(t,indent){ indent=indent||''; var res=[];
+    String(t==null?'':t).split('\n').forEach(function(rawLine){
+      var words=rawLine.split(/\s+/).filter(Boolean);
+      if(!words.length){ res.push(''); return; }
+      var cur=indent, first=true;
+      words.forEach(function(w){
+        while(w.length > W-indent.length){ if(cur.length>indent.length){res.push(cur);cur=indent;} res.push(indent+w.slice(0,W-indent.length)); w=w.slice(W-indent.length); }
+        var at=first?cur+w:cur+' '+w;
+        if(at.length<=W){cur=at;first=false;} else {res.push(cur);cur=indent+w;first=false;}
+      });
+      if(cur.length>0) res.push(cur);
+    });
+    return res;
+  }
+
+  function buildCopy(){
+    /* Masthead — printer-centred so double-size text centres correctly. */
+    align(1);
+    bold(true); size(is58 ? 0x01 : 0x11); line("HONG'S THAI TAKEAWAY"); size(0x00); bold(false);
+    line('01386 423341');
+    line('9 Four Pools Shopping Centre, Davies Road');
+    line('Evesham, WR11 1YP');
+    bold(true);
+    line(dash());
+    line(ord.orderType==='delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
+    line(dash());
+    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('*** SCHEDULED ***'); line(String(ord.scheduleTime).toUpperCase()); }
+    else { line('*** ASAP ***'); }
+    line(dash());
+    bold(false);
+
+    /* Big C / D order-type marker (right-aligned, large) — the ESC/POS stand-in
+       for the floated letter in the old HTML receipt. */
+    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(0x00); bold(false);
+
+    /* Customer info — left aligned. */
+    align(0);
+    line('Date : ' + (ord.date||''));
+    line('Time : ' + (ord.time||''));
+    line('Name : ' + (ord.customer.name||''));
+    lf();
+    line('Tel  : ' + (ord.customer.phone||''));
+    lf();
+    if (ord.orderType==='delivery'){
+      var parts = ord.customer.address
+        ? String(ord.customer.address).split(/[\n,]+/).map(function(x){ return x.trim(); }).filter(Boolean)
+        : [''];
+      if (!parts.length) parts=[''];
+      var addrLines=[];
+      parts.forEach(function(p){ wrap(p,'       ').forEach(function(w){ addrLines.push(w); }); });
+      if (!addrLines.length) addrLines=['       '];
+      addrLines.forEach(function(w,i){ line(i===0 ? 'Addr : '+w.slice(7) : w); });
+      lf();
+    }
+    line(dash());
+
+    if (ord.customer.notes && ord.customer.notes.trim()){
+      line('NOTE:'); wrap(ord.customer.notes,'').forEach(function(l){ line(l); }); line(dash());
+    }
+    if (ord.paymentType){ line(lr('Payment', ord.paymentType==='card'?'CARD':'CASH')); line(dash()); }
+
+    line(lr('QTY  ITEM','AMT')); line(dash());
+    ord.items.forEach(function(item){
+      var extraAmt=parseFloat(item.extra)||0;
+      var amt=item.price*item.qty+extraAmt;
+      var amtStr=money(amt);
+      var qtyStr=item.qty+' x ';
+      var firstWidth=W-qtyStr.length-amtStr.length-1; if(firstWidth<6) firstWidth=6;
+      var contIndent='     ', contWidth=W-contIndent.length;
+      var name=String(item.name||''), chunks=[], remaining=name, done=false;
+      while(remaining.length>0){
+        var budget=done?contWidth:firstWidth;
+        if(remaining.length<=budget){ chunks.push(remaining); break; }
+        var sl=remaining.slice(0,budget), br=sl.lastIndexOf(' ');
+        if(br>0){ chunks.push(remaining.slice(0,br)); remaining=remaining.slice(br+1); }
+        else { chunks.push(sl); remaining=remaining.slice(budget); }
+        done=true;
+      }
+      if(!chunks.length) chunks=[''];
+      line(lr(qtyStr+chunks[0], amtStr));
+      for (var i=1;i<chunks.length;i++) line(contIndent+chunks[i]);
+      if (extraAmt>0 && !item.custom) line('  + Extra: '+money(extraAmt));
+      if (item.comment && item.comment.trim()){
+        item.comment.trim().split('\n').forEach(function(l){ if(l.trim()) wrap(l.trim(),'  > ').forEach(function(w){ line(w); }); });
+      }
+      lf();
+    });
+
+    var foodTotalAmt=parseFloat(ord.foodTotal)||0;
+    var deliveryAmt=parseFloat(ord.deliveryCharge)||0;
+    var discountAmt2=parseFloat(ord.discountAmt)||0;
+    var safeTotal=parseFloat(ord.total);
+    if (isNaN(safeTotal)) safeTotal=Math.max(0, foodTotalAmt+deliveryAmt-discountAmt2);
+    safeTotal=Math.max(0, safeTotal);
+    var showSubtotal = deliveryAmt>0 || discountAmt2>0;
+
+    line(dash());
+    if (showSubtotal){
+      line(lr('Subtotal', money(foodTotalAmt)));
+      if (deliveryAmt>0) line(lr('Delivery', money(deliveryAmt)));
+      if (discountAmt2>0){
+        var dl = (ord.discount && ord.discount.type==='pct' && ord.discount.pct>0) ? '-'+ord.discount.pct+'%' : '-'+money(discountAmt2);
+        line(lr('Discount', dl));
+      }
+      line(dash());
+    }
+    /* Big TOTAL — double size, so columns halve; pad against W/2. */
+    var W2=Math.floor(W/2);
+    bold(true); size(0x11);
+    var tl='TOTAL', tr=money(safeTotal), g=W2-tl.length-tr.length; if(g<1) g=1;
+    line(tl+rep(' ',g)+tr);
+    size(0x00); bold(false);
+    line(dash());
+  }
+
+  raw(0x1B,0x40);       /* init */
+  raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
+  for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(40); }
+  feedDots(feed*8);     /* trailing feed: mm -> dots @203dpi, clears the tear bar */
+  lf(); lf();
+  return Uint8Array.from(out);
+}
+
+/* New print path: build ESC/POS bytes and stream them to the connected printer.
+   No window.print(), no Android preview, so long orders can't be clipped.
+   (The old HTML/print-service routine survives as printReceiptHTML for
+   reference but is no longer wired to any button.) The printMode argument is
+   accepted only for call-site compatibility; the live transport is whatever the
+   user connected in Settings. */
+function printReceipt(ord, paperSize, copies, feedMm, printMode) {
+  if (!ThermalPrinter.isConnected()){
+    window.alert('No printer connected.\n\nOpen Settings and tap "Connect Printer" (USB recommended).');
+    return;
+  }
+  var bytes;
+  try { bytes = buildReceiptBytes(ord, paperSize, copies, feedMm); }
+  catch(e){ console.error('receipt build failed', e); window.alert('Could not build receipt: ' + (e && e.message ? e.message : e)); return; }
+  ThermalPrinter.write(bytes).catch(function(e){
+    console.error('print failed', e);
+    window.alert('Print failed: ' + (e && e.message ? e.message : e) + '\n\nReconnect the printer in Settings.');
+  });
 }
 
 /* ── SEQUENTIAL PRINT QUEUE (Android BT compatible) ── */
@@ -2464,9 +2786,44 @@ function BackupRestore(props) {
 
   var fileRef = useRef(null);
 
+  /* Live thermal-printer connection status (USB / Bluetooth), driven by the
+     ThermalPrinter module so the UI reflects connect/disconnect events. */
+  var connState = useState(ThermalPrinter.getStatus()); var conn = connState[0]; var setConn = connState[1];
+  var busyState = useState(false); var busy = busyState[0]; var setBusy = busyState[1];
+  useEffect(function(){ return ThermalPrinter.subscribe(setConn); }, []);
+
   function showMsg(text, ok) {
     setMsg({text: text, ok: ok !== false});
     setTimeout(function(){ setMsg(null); }, 3500);
+  }
+
+  function printerConnect(){
+    setBusy(true);
+    ThermalPrinter.connect(props.printMode).then(function(st){
+      setBusy(false);
+      showMsg('Printer connected: ' + (st.name || (props.printMode==='bluetooth' ? 'Bluetooth' : 'USB')), true);
+    }).catch(function(e){
+      setBusy(false);
+      showMsg(e && e.message ? e.message : 'Connection failed', false);
+    });
+  }
+  function printerDisconnect(){
+    ThermalPrinter.disconnect().then(function(){ showMsg('Printer disconnected', true); });
+  }
+  function printerTest(){
+    if (!ThermalPrinter.isConnected()){ showMsg('Connect a printer first', false); return; }
+    var now = new Date();
+    var testOrd = {
+      orderType:'collection', scheduleType:'asap',
+      date: now.toLocaleDateString('en-GB'),
+      time: now.toLocaleTimeString('en-GB',{hour:'2-digit', minute:'2-digit'}),
+      customer:{ name:'TEST PRINT', phone:'', address:'', notes:'' },
+      items:[{ name:'Test Item', qty:1, price:9.50, extra:0 }],
+      foodTotal:9.50, deliveryCharge:0, discountAmt:0, total:9.50, paymentType:null
+    };
+    ThermalPrinter.write(buildReceiptBytes(testOrd, props.paperSize, '1', '15'))
+      .then(function(){ showMsg('Test receipt sent', true); })
+      .catch(function(e){ showMsg('Test failed: ' + (e && e.message ? e.message : e), false); });
   }
 
   function doExport() {
@@ -2540,31 +2897,45 @@ function BackupRestore(props) {
         'Prints all copies in one job — each copy is separated by a short blank gap.'
       )
     ),
-    /* Print mode selector — switches between USB and Bluetooth render profiles.
-       The two Looped Labs services rasterize differently; this lets the user
-       compensate without touching code. */
+    /* ── Printer connection (direct ESC/POS over WebUSB / Web Bluetooth) ──
+       Pick the transport, then Connect. Bytes stream straight to the printer —
+       no Android print preview, so long orders can't be clipped. */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
-      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udcf6 PRINT MODE'),
-      h('div', {style:{display:'flex',gap:8}},
-        [['usb','USB'],['bluetooth','Bluetooth']].map(function(opt) {
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83d\udda8\ufe0f PRINTER CONNECTION'),
+      h('div', {style:{display:'flex',gap:8,marginBottom:12}},
+        [['usb','USB Printer'],['bluetooth','Bluetooth Printer']].map(function(opt) {
           var v = opt[0], label = opt[1];
           var active = props.printMode === v;
           return h('button', {
             key: v, className:'mbtn',
             onClick: function(){ props.setPrintMode(v); },
             style:{
-              flex:1, padding:'18px 0', borderRadius:10,
+              flex:1, padding:'16px 0', borderRadius:10,
               border:'1px solid ' + (active ? C.accent : C.border),
               background: active ? C.accentBg : 'transparent',
               color: active ? C.accent : C.text,
-              fontWeight:700, fontSize:15, cursor:'pointer',
-              minHeight:60
+              fontWeight:700, fontSize:14, cursor:'pointer', minHeight:56
             }
           }, label);
         })
       ),
-      h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
-        'USB: tuned for Looped Labs USB Print Service. Bluetooth: bigger fonts and wider content to compensate for Bluetooth print services that shrink output. Switch when you change cable.'
+      /* Connection status indicator */
+      h('div', {style:{display:'flex',alignItems:'center',gap:8,marginBottom:12}},
+        h('span', {style:{width:10,height:10,borderRadius:'50%',background: conn.connected ? '#70e890' : '#a03030',flexShrink:0}}),
+        h('span', {style:{fontSize:13,fontWeight:700,color: conn.connected ? '#70e890' : C.muted}},
+          conn.connected ? ('Connected — ' + (conn.name || (conn.kind==='bluetooth' ? 'Bluetooth' : 'USB'))) : 'Not connected'
+        )
+      ),
+      conn.connected
+        ? h('div', {style:{display:'flex',gap:8}},
+            h('button', {className:'mbtn', onClick:printerTest, style:{flex:1,padding:'12px',borderRadius:9,border:'1px solid ' + C.border,background:'transparent',color:C.text,fontWeight:700,fontSize:13,cursor:'pointer'}}, '\ud83e\uddfe Test Print'),
+            h('button', {className:'mbtn', onClick:printerDisconnect, style:{flex:1,padding:'12px',borderRadius:9,border:'1px solid ' + C.danger,background:'transparent',color:'#e87070',fontWeight:700,fontSize:13,cursor:'pointer'}}, 'Disconnect')
+          )
+        : h('button', {className:'mbtn', onClick:printerConnect, disabled:busy, style:{width:'100%',padding:'14px',borderRadius:10,border:'none',background:C.accent,color:C.bg,fontWeight:800,fontSize:15,cursor:'pointer',opacity:busy?0.6:1}},
+            busy ? 'Connecting\u2026' : ('\ud83d\udd0c Connect ' + (props.printMode==='bluetooth' ? 'Bluetooth' : 'USB') + ' Printer')
+          ),
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:10,lineHeight:1.5}},
+        'USB is the most reliable route for the NETUM NT-8003 (connect with a USB-OTG cable). Bluetooth works only with BLE printers; many receipt printers use classic Bluetooth, which browsers can\u2019t reach \u2014 use USB for those. Set Paper Size to 80mm below.'
       )
     ),
     /* === Divider between frequently used and advanced settings === */
@@ -2962,6 +3333,10 @@ function App() {
     });
     return function(){ setPrintQueueListener(null); };
   }, []);
+
+  /* Re-open a previously authorized USB printer on load so printing works
+     immediately without re-prompting. Silent no-op if none / not supported. */
+  useEffect(function(){ ThermalPrinter.tryRestoreUSB(); }, []);
 
   var queueProps = {queue:queue,setQueue:setQueue,orders:orders,setOrders:setOrders,
     onPrint:function(ord){
