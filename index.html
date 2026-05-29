@@ -287,8 +287,8 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
        - 80mm: 28 chars at 18px Courier ≈ 75mm content in 80mm paper
        -        = ~2.5mm margin each side, comfortably centered.
        - 58mm: 22 chars at 16px Courier ≈ 53mm content in 58mm paper. */
-    W          = is58 ? 21 : 27;
-    mmWidth    = is58 ? '51mm' : '73mm';
+    W          = is58 ? 20 : 26;
+    mmWidth    = is58 ? '49mm' : '71mm';
     fontSize   = is58 ? '16px' : '18px';
     lineH      = is58 ? '1.35' : '1.4';
     padTop     = is58 ? '2mm'  : '3mm';
@@ -296,14 +296,14 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     bigLetterFs= is58 ? '44px' : '56px';
     headerNameFs= is58? '18px' : '22px';
     addrFs     = is58 ? '12px' : '14px';
-    Wdash      = is58 ? 21     : 27;
+    Wdash      = is58 ? 20     : 26;
   } else {
     /* USB now uses the SAME sizing profile as Bluetooth. The print logic was
        always identical between the two modes; only these dimensions differed,
        and the Bluetooth values are the ones proven to print large orders
        cleanly. Matching them gives USB the same well-behaved rendering. */
-    W          = is58 ? 21 : 27;
-    mmWidth    = is58 ? '51mm' : '73mm';
+    W          = is58 ? 20 : 26;
+    mmWidth    = is58 ? '49mm' : '71mm';
     fontSize   = is58 ? '16px' : '18px';
     lineH      = is58 ? '1.35' : '1.4';
     padTop     = is58 ? '2mm'  : '3mm';
@@ -311,7 +311,7 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
     bigLetterFs= is58 ? '44px' : '56px';
     headerNameFs= is58? '18px' : '22px';
     addrFs     = is58 ? '12px' : '14px';
-    Wdash      = is58 ? 21     : 27;
+    Wdash      = is58 ? 20     : 26;
   }
 
   var styleEl = document.getElementById('receipt-print-style');
