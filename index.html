@@ -315,7 +315,11 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
   styleEl.textContent =
     '@media print{' +
-      '@page{size:' + mmSize + ' auto;margin:0;}' +
+      /* Fixed page height makes the page-break position deterministic so the
+         padPageBreaks() measurement pass can pad content off the seam precisely.
+         297mm matches the default the print engine already imposes on an
+         auto-height thermal page, so paper behaviour is unchanged. */
+      '@page{size:' + (is58 ? '58mm' : '80mm') + ' 297mm;margin:0;}' +
       /* Plain block layout. The previous inline-block + text-align:center
          centering trick caused the frame to shrink-wrap to its content,
          ignoring the declared width and breaking layout. margin:0 auto on
@@ -336,19 +340,16 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
         'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
         'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
       '}' +
-      /* Thermal receipts must print as ONE continuous strip — there are no
-         physical pages. The earlier 'page-break-inside:avoid' backfired: when a
-         large order made the receipt taller than one virtual page, the engine
-         could not honour it and broke the receipt across pages anyway, and the
-         Bluetooth service ran those pages together, overlapping the items at
-         each seam. Instead we forbid page breaks inside the receipt and on
-         every child element, so the whole thing stays a single unbroken flow.
-         (Explicit page breaks between multi-copy prints are added separately
-         and are unaffected by this.) */
-      '#receipt-frame, #receipt-frame .receipt-copy, #receipt-frame pre, #receipt-frame div, #receipt-frame table, #receipt-frame tr, #receipt-frame td{' +
+      /* Keep individual small blocks from splitting mid-content (a single <pre>
+         of items, the banner, the footer). We do NOT try to keep the whole
+         receipt on one page — instead a measurement pass (see padPageBreaks)
+         predicts where the printer's page boundary falls and inserts a blank
+         spacer so no real content ever straddles the seam. That's the reliable
+         fix: work WITH the unavoidable page break, not against it. */
+      '#receipt-frame pre, #receipt-frame .receipt-footer{' +
         'page-break-inside:avoid;break-inside:avoid;' +
-        'page-break-before:auto;break-before:auto;' +
       '}' +
+      '#receipt-frame .page-spacer{height:0;}' +
     '}';
 
   function escHtml(s) {
@@ -494,20 +495,22 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       blocks.push('<pre>' + escHtml(payText) + '\n' + dashLineWide() + '\n</pre>');
     }
 
-    var itemLines = [lineLR('QTY  ITEM', 'AMT'), dashLineWide()];
+    /* QTY/ITEM header as its own block. */
+    blocks.push('<pre>' + escHtml(lineLR('QTY  ITEM', 'AMT') + '\n' + dashLineWide()) + '\n</pre>');
+    /* Each item is its OWN <pre> block so the page-break padder can move whole
+       items cleanly between pages (a single giant items <pre> could only be
+       moved as one unit, wasting a page). Each block holds the item's name
+       line(s), any extra/comment lines, and a trailing blank for spacing. */
     ord.items.forEach(function(item) {
       var extraAmt = parseFloat(item.extra) || 0;
       var amt = item.price * item.qty + extraAmt;
       var amtStr = '\u00a3' + amt.toFixed(2);
       var qtyStr = item.qty + ' x ';
-      /* First-line name budget: width minus qty prefix, amt suffix, and 1-char gap.
-         Continuation lines have the full width minus a 5-char indent. */
       var firstWidth = W - qtyStr.length - amtStr.length - 1;
       if (firstWidth < 6) firstWidth = 6;
       var contIndent = '     ';
       var contWidth = W - contIndent.length;
 
-      /* Word-wrap the name into chunks that fit each line's budget */
       var name = String(item.name || '');
       var chunks = [];
       var remaining = name;
@@ -515,14 +518,12 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       while (remaining.length > 0) {
         var budget = firstChunkDone ? contWidth : firstWidth;
         if (remaining.length <= budget) { chunks.push(remaining); break; }
-        /* Try to break at last space within budget */
         var slice = remaining.slice(0, budget);
         var breakAt = slice.lastIndexOf(' ');
         if (breakAt > 0) {
           chunks.push(remaining.slice(0, breakAt));
           remaining = remaining.slice(breakAt + 1);
         } else {
-          /* No space — hard-break at budget */
           chunks.push(slice);
           remaining = remaining.slice(budget);
         }
@@ -530,31 +531,18 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
       }
       if (chunks.length === 0) chunks = [''];
 
-      itemLines.push(lineLR(qtyStr + chunks[0], amtStr));
-      for (var i = 1; i < chunks.length; i++) itemLines.push(contIndent + chunks[i]);
-
-      /* `extra` carries different meanings: for normal items it's an upcharge
-         on top of base price (so we print '+ Extra: £X'); for custom items
-         it's the entire price (already reflected in the line total above), so
-         no separate Extra line is needed. */
-      if (extraAmt > 0 && !item.custom) itemLines.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
+      var oneItem = [];
+      oneItem.push(lineLR(qtyStr + chunks[0], amtStr));
+      for (var i = 1; i < chunks.length; i++) oneItem.push(contIndent + chunks[i]);
+      if (extraAmt > 0 && !item.custom) oneItem.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
       if (item.comment && item.comment.trim()) {
         item.comment.trim().split('\n').forEach(function(l) {
-          if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { itemLines.push(w); });
+          if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { oneItem.push(w); });
         });
       }
-      /* Single blank line between items. (Earlier large-order overlap was
-         caused by the receipt paginating across virtual pages, not by dropped
-         spacer lines — that's fixed in the print CSS by suppressing page
-         breaks inside the receipt.) */
-      itemLines.push('');
+      oneItem.push('');   /* trailing blank between items */
+      blocks.push('<pre>' + escHtml(oneItem.join('\n')) + '</pre>');
     });
-    /* NB: no trailing divider here — the divider that separates items from the
-       summary is now part of the summary footer group below, so the whole
-       footer (divider + Subtotal/Delivery/Discount + divider + TOTAL + divider)
-       stays together as one unbreakable unit and the top divider can't be
-       dropped by a page break landing at the bottom of a page. */
-    blocks.push('<pre>' + escHtml(itemLines.join('\n')) + '\n</pre>');
 
     var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
     var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
@@ -621,14 +609,9 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
 
   var frame = document.getElementById('receipt-frame');
 
-  /* Build ALL copies into ONE continuous document and print it with a SINGLE
-     window.print() — so the user sees the print preview exactly once per press,
-     never once per copy.
-     Copies are separated by a feed gap, NOT a page break. The USB print service
-     crashed on the old multi-PAGE document (explicit page breaks between copies);
-     a single continuous strip prints reliably — it's the same shape as a large
-     single-copy order, which already prints fine. Each copy keeps its own
-     trailing feed so there's tear-off space between them and after the last. */
+  /* Build ALL copies into ONE continuous document, printed with a SINGLE
+     window.print() (one preview per press). Copies are separated by a feed gap.
+     A measurement pass then pads any content that would straddle a page seam. */
   var allHtml = [];
   for (var ci = 0; ci < numCopies; ci++) {
     allHtml.push(buildCopyHtml());
@@ -636,13 +619,70 @@ function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   }
   frame.innerHTML = allHtml.join('');
 
-  /* Force synchronous layout so the print snapshot is never truncated. */
+  /* Force synchronous layout so measurements + the print snapshot are correct. */
   var _h = frame.offsetHeight; void _h;
   var _h2 = frame.scrollHeight; void _h2;
+
+  /* ── Page-break padding ──
+     The Android print service WILL paginate a tall receipt, and whichever
+     element lands on the page boundary gets mangled (overlap / dropped line).
+     Rather than fight it, we predict the boundary and insert a blank spacer so
+     the boundary falls in blank space and every real block sits wholly on one
+     page. Uses the real rendered page height in px derived from the fixed
+     297mm @page (so it tracks the actual layout, whatever the font/zoom). */
+  function padPageBreaks() {
+    try {
+      /* Derive pixels-per-mm from the frame's own rendered width vs its mm width
+         so the page-height calc matches the actual print scale. */
+      var frameW = frame.getBoundingClientRect().width;
+      var mmW = parseFloat(mmWidth);            /* e.g. 72 or 75 or 48 or 53 */
+      if (!frameW || !mmW) return;
+      var pxPerMm = frameW / mmW;
+      var pagePx = 297 * pxPerMm;               /* matches @page height */
+      if (!isFinite(pagePx) || pagePx <= 0) return;
+
+      /* Walk top-level children; if a block crosses a page boundary, pad it to
+         the next page top. We re-measure after each insertion because adding a
+         spacer shifts everything below it. Guard with an iteration cap. */
+      var guard = 0;
+      var frameTop = frame.getBoundingClientRect().top;
+      var node = frame.firstChild;
+      while (node && guard < 400) {
+        guard++;
+        if (node.nodeType !== 1) { node = node.nextSibling; continue; }
+        var r = node.getBoundingClientRect();
+        var top = r.top - frameTop;
+        var bottom = r.bottom - frameTop;
+        var pageOfTop = Math.floor(top / pagePx);
+        var pageOfBottom = Math.floor((bottom - 0.5) / pagePx);
+        /* If this block starts and ends on different pages, it straddles the
+           seam — push it to the next page by padding the gap to the boundary. */
+        if (pageOfBottom > pageOfTop && (bottom - top) < pagePx) {
+          var nextBoundary = (pageOfTop + 1) * pagePx;
+          var gap = nextBoundary - top;
+          if (gap > 0.5) {
+            var spacer = document.createElement('div');
+            spacer.className = 'page-spacer';
+            spacer.style.height = gap + 'px';
+            spacer.style.width = '100%';
+            node.parentNode.insertBefore(spacer, node);
+            /* Re-measure from this spacer onward; continue from the same node
+               (now shifted down to the next page top). */
+            frame.offsetHeight; /* reflow */
+            continue;
+          }
+        }
+        node = node.nextSibling;
+      }
+    } catch (e) { /* measurement is best-effort; printing proceeds regardless */ }
+  }
 
   function firePrint() {
     requestAnimationFrame(function() {
       requestAnimationFrame(function() {
+        padPageBreaks();
+        /* Reflow once more so the print snapshot includes the spacers. */
+        frame.offsetHeight;
         setTimeout(function() {
           try { window.print(); } catch(e) { console.error('print failed', e); }
           clearBusy();
