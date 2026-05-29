@@ -815,8 +815,23 @@ var ThermalPrinter = (function () {
     try {
       if (!window.isSecureContext || !navigator.usb || !navigator.usb.getDevices) return;
       var devs = await navigator.usb.getDevices();
-      if (devs && devs.length) await openUSB(devs[0]);
+      if (devs && devs.length && !s.connected) await openUSB(devs[0]);
     } catch(e){ /* silent — user can connect manually */ }
+  }
+  /* Auto-open a device surfaced by the USB 'connect' event (fires only for
+     printers the user has already authorized). Lets a replug reconnect with no
+     click. Skipped if already connected; brief settle delay + one retry covers
+     the moment right after enumeration when the device isn't ready yet. */
+  var _autoBusy = false;
+  async function autoOpen(device){
+    if (s.connected || _autoBusy) return;
+    _autoBusy = true;
+    try {
+      await wait(300);
+      try { await openUSB(device); }
+      catch(e){ await wait(600); if (!s.connected) await openUSB(device); }
+    } catch(e){ /* leave disconnected; manual Connect still works */ }
+    finally { _autoBusy = false; }
   }
 
   /* ---- Web Bluetooth (BLE) ---- */
@@ -886,6 +901,7 @@ var ThermalPrinter = (function () {
 
   if (navigator.usb && navigator.usb.addEventListener) {
     navigator.usb.addEventListener('disconnect', function(e){ if (s.device && e.device===s.device) reset(); });
+    navigator.usb.addEventListener('connect', function(e){ autoOpen(e.device); });
   }
 
   return { connect:connect, disconnect:disconnect, write:write, subscribe:subscribe,
@@ -901,6 +917,10 @@ var ThermalPrinter = (function () {
 function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   var is58 = paperSize === '58';
   var W = is58 ? 32 : 48;
+  /* Body text magnification: double-HEIGHT only (GS ! 0x01). Width stays ×1, so
+     the column count is unchanged and amounts never collide with item names.
+     Masthead name, phone/address/postcode and the TOTAL keep their own sizes. */
+  var BODY = 0x01;
   var numCopies = parseInt(copies, 10) || 1;
   var feed = parseInt(feedMm, 10); if (isNaN(feed)) feed = 20;
   var out = [];
@@ -946,6 +966,7 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     line('01386 423341');
     line('9 Four Pools Shopping Centre, Davies Road');
     line('Evesham, WR11 1YP');
+    size(BODY);
     bold(true);
     line(dash());
     line(ord.orderType==='delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
@@ -957,7 +978,7 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
     /* Big C / D order-type marker (right-aligned, large) — the ESC/POS stand-in
        for the floated letter in the old HTML receipt. */
-    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(0x00); bold(false);
+    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(BODY); bold(false);
 
     /* Customer info — left aligned. */
     align(0);
@@ -1035,13 +1056,17 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     bold(true); size(0x11);
     var tl='TOTAL', tr=money(safeTotal), g=W2-tl.length-tr.length; if(g<1) g=1;
     line(tl+rep(' ',g)+tr);
-    size(0x00); bold(false);
+    size(BODY); bold(false);
     line(dash());
+    size(0x00);
   }
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(40); }
+  /* Blank gap between copies so each can be torn off cleanly. ~12mm of plain
+     paper feed — no text, no divider line. */
+  var INTER_COPY_DOTS = 96;
+  for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(INTER_COPY_DOTS); }
   feedDots(feed*8);     /* trailing feed: mm -> dots @203dpi, clears the tear bar */
   lf(); lf();
   return Uint8Array.from(out);
