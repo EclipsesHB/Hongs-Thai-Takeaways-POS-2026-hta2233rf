@@ -933,15 +933,21 @@ var ThermalPrinter = (function () {
    space-padding column maths exact. */
 function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   var is58 = paperSize === '58';
-  /* Column budget. 80mm body is now double-WIDTH+height, so each char is twice
-     as wide -> 24 columns (was 48 at single width). 58mm is left at its proven
-     single-width/double-height profile (32 cols). */
-  var W = is58 ? 32 : 24;
-  /* Body text magnification. 80mm: double width AND height (GS ! 0x11) so the
-     text keeps the normal ~1:2 glyph proportion instead of looking tall/thin.
-     58mm: double height only (0x01), unchanged. Masthead name, phone/address/
-     postcode and the TOTAL keep their own sizes. */
+  /* Column budget = 32 for both sizes. 80mm body now prints in Font B at double
+     size (Font B is ~9 dots wide -> 64 cols at 1x -> 32 at double width), a
+     middle ground: smaller than Font A double-size but still naturally
+     proportioned. 58mm keeps its Font A single-width/double-height profile (also
+     32 cols). */
+  var W = 32;
+  /* 80mm prints the BODY in the smaller Font B; 58mm stays on Font A. The
+     masthead name and the TOTAL always stay in the larger Font A. */
+  var bodyFontB = !is58;
+  /* Body magnification. 80mm: Font B double width+height (GS ! 0x11) for a
+     natural, medium-sized look. 58mm: Font A double height only (0x01). */
   var BODY = is58 ? 0x01 : 0x11;
+  /* Columns available to the double-size Font A TOTAL line: 24 on 80mm (Font A
+     double width), 16 on 58mm (W/2). */
+  var totalCols = is58 ? Math.floor(W/2) : 24;
   var numCopies = parseInt(copies, 10) || 1;
   var feed = parseInt(feedMm, 10); if (isNaN(feed)) feed = 20;
   var out = [];
@@ -960,6 +966,8 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   function align(n){ raw(0x1B,0x61,n); }              /* 0 left, 1 centre, 2 right */
   function bold(on){ raw(0x1B,0x45, on?1:0); }
   function size(n){ raw(0x1D,0x21,n); }               /* GS ! n  (0x11 = double w+h) */
+  function fontA(){ raw(0x1B,0x4D,0x00); }             /* ESC M 0 — Font A (12x24) */
+  function fontB(){ raw(0x1B,0x4D,0x01); }             /* ESC M 1 — Font B (9x17, smaller) */
   function feedDots(d){ d=Math.max(0,Math.round(d)); while(d>0){ var n=Math.min(255,d); raw(0x1B,0x4A,n); d-=n; } }
   function rep(c,n){ var x=''; for (var i=0;i<n;i++) x+=c; return x; }
   function dash(){ return rep('-', W); }
@@ -987,6 +995,7 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     line('01386 423341');
     line('9 Four Pools Shopping Centre, Davies Road');
     line('Evesham, WR11 1YP');
+    if (bodyFontB) fontB();
     size(BODY);
     bold(true);
     line(dash());
@@ -1077,16 +1086,18 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
       }
       line(dash());
     }
-    /* Big TOTAL — double width+height. On 80mm the body is already double-width
-       (W=24 effective double cols), so TOTAL pads against W. On 58mm the body is
-       single width, so the double-width TOTAL spans W/2. */
-    var W2 = is58 ? Math.floor(W/2) : W;
+    /* Big TOTAL — always the larger Font A at double width+height. On 80mm the
+       body is Font B, so switch fonts around this line; pad to totalCols (24 on
+       80mm Font A, 16 on 58mm). */
+    if (bodyFontB) fontA();
     bold(true); size(0x11);
-    var tl='TOTAL', tr=money(safeTotal), g=W2-tl.length-tr.length; if(g<1) g=1;
+    var tl='TOTAL', tr=money(safeTotal), g=totalCols-tl.length-tr.length; if(g<1) g=1;
     line(tl+rep(' ',g)+tr);
     size(BODY); bold(false);
+    if (bodyFontB) fontB();
     line(dash());
     size(0x00);
+    if (bodyFontB) fontA();
   }
 
   raw(0x1B,0x40);       /* init */
