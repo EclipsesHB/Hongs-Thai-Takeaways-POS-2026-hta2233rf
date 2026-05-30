@@ -968,7 +968,19 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   function size(n){ raw(0x1D,0x21,n); }               /* GS ! n  (0x11 = double w+h) */
   function fontA(){ raw(0x1B,0x4D,0x00); }             /* ESC M 0 — Font A (12x24) */
   function fontB(){ raw(0x1B,0x4D,0x01); }             /* ESC M 1 — Font B (9x17, smaller) */
-  function feedDots(d){ d=Math.max(0,Math.round(d)); while(d>0){ var n=Math.min(255,d); raw(0x1B,0x4A,n); d-=n; } }
+  /* Feed blank paper. Uses real line feeds at a fixed line spacing rather than
+     ESC J (print-and-feed-by-dots), because many cheap ESC/POS printers (incl.
+     Netum clones) ignore or under-feed ESC J — which is why dot-based gaps came
+     out non-existent. Line feeds advance the paper on every thermal printer. */
+  function feedDots(d){
+    d = Math.max(0, Math.round(d));
+    if (d <= 0) return;
+    var unit = 24;                            /* dots per blank line (~3mm @203dpi) */
+    var n = Math.ceil(d / unit);
+    raw(0x1B,0x33,unit);                      /* ESC 3 n — set line spacing to n dots */
+    for (var i=0;i<n;i++) out.push(0x0A);     /* blank line feeds */
+    raw(0x1B,0x32);                           /* ESC 2 — restore default line spacing */
+  }
   function rep(c,n){ var x=''; for (var i=0;i<n;i++) x+=c; return x; }
   function dash(){ return rep('-', W); }
   function lr(l,r){ l=String(l); r=String(r); var g=W-l.length-r.length; if(g<1) g=1; return l+rep(' ',g)+r; }
@@ -999,16 +1011,21 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     size(BODY);
     bold(true);
     line(dash());
-    line(ord.orderType==='delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
+    line(ord.orderType==='delivery' ? 'DELIVERY' : 'COLLECTION');
     line(dash());
-    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('*** SCHEDULED ***'); line(String(ord.scheduleTime).toUpperCase()); }
-    else { line('*** ASAP ***'); }
+    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('SCHEDULED ' + String(ord.scheduleTime).toUpperCase()); }
+    else { line('ASAP'); }
     line(dash());
     bold(false);
 
     /* Big C / D order-type marker (right-aligned, large) — the ESC/POS stand-in
-       for the floated letter in the old HTML receipt. */
-    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(BODY); bold(false);
+       for the floated letter in the old HTML receipt. Font A triple width+height
+       so it's a clear, bold glyph; switch back to the body font afterwards. */
+    align(2); bold(true);
+    if (bodyFontB) fontA();
+    size(0x22); line(ord.orderType==='delivery' ? 'D' : 'C');
+    if (bodyFontB) fontB();
+    size(BODY); bold(false);
 
     /* Customer info — left aligned. */
     align(0);
@@ -1102,9 +1119,9 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  /* Blank gap between copies so each can be torn off cleanly. ~15mm of plain
+  /* Blank gap between copies so each can be torn off cleanly. ~18mm of plain
      paper feed — no text, no divider line. */
-  var INTER_COPY_DOTS = 120;
+  var INTER_COPY_DOTS = 144;
   for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(INTER_COPY_DOTS); }
   feedDots(feed*8);     /* trailing feed: mm -> dots @203dpi, clears the tear bar */
   lf(); lf();
