@@ -999,21 +999,16 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     size(BODY);
     bold(true);
     line(dash());
-    line(ord.orderType==='delivery' ? 'DELIVERY' : 'COLLECTION');
+    line(ord.orderType==='delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
     line(dash());
-    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('SCHEDULED ' + String(ord.scheduleTime).toUpperCase()); }
-    else { line('ASAP'); }
+    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('*** SCHEDULED ***'); line(String(ord.scheduleTime).toUpperCase()); }
+    else { line('*** ASAP ***'); }
     line(dash());
     bold(false);
 
     /* Big C / D order-type marker (right-aligned, large) — the ESC/POS stand-in
-       for the floated letter in the old HTML receipt. Font A triple width+height
-       so it's a clear, bold glyph; switch back to the body font afterwards. */
-    align(2); bold(true);
-    if (bodyFontB) fontA();
-    size(0x22); line(ord.orderType==='delivery' ? 'D' : 'C');
-    if (bodyFontB) fontB();
-    size(BODY); bold(false);
+       for the floated letter in the old HTML receipt. */
+    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(BODY); bold(false);
 
     /* Customer info — left aligned. */
     align(0);
@@ -1107,9 +1102,9 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  /* Blank gap between copies so each can be torn off cleanly. ~18mm of plain
+  /* Blank gap between copies so each can be torn off cleanly. ~15mm of plain
      paper feed — no text, no divider line. */
-  var INTER_COPY_DOTS = 144;
+  var INTER_COPY_DOTS = 120;
   for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(INTER_COPY_DOTS); }
   feedDots(feed*8);     /* trailing feed: mm -> dots @203dpi, clears the tear bar */
   lf(); lf();
