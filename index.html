@@ -933,21 +933,21 @@ var ThermalPrinter = (function () {
    space-padding column maths exact. */
 function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   var is58 = paperSize === '58';
-  /* Column budget. 80mm body prints in Font B at double-HEIGHT, single-WIDTH —
-     slightly smaller on the roll than the previous double-width Font B, and
-     fits ~42 cols (Font B ~9 dots wide -> 64 at 1x; using 42 leaves margin and
-     keeps amounts clear of names). 58mm keeps its Font A double-height profile
-     at 32 cols. */
-  var W = is58 ? 32 : 42;
+  /* Column budget = 32 for both sizes. 80mm body now prints in Font B at double
+     size (Font B is ~9 dots wide -> 64 cols at 1x -> 32 at double width), a
+     middle ground: smaller than Font A double-size but still naturally
+     proportioned. 58mm keeps its Font A single-width/double-height profile (also
+     32 cols). */
+  var W = 32;
   /* 80mm prints the BODY in the smaller Font B; 58mm stays on Font A. The
      masthead name and the TOTAL always stay in the larger Font A. */
   var bodyFontB = !is58;
-  /* Body magnification: double HEIGHT only (GS ! 0x01) for both — on 80mm the
-     smaller Font B cell makes this read as a touch smaller than before. */
-  var BODY = 0x01;
+  /* Body magnification. 80mm: Font B double width+height (GS ! 0x11) for a
+     natural, medium-sized look. 58mm: Font A double height only (0x01). */
+  var BODY = is58 ? 0x01 : 0x11;
   /* Columns available to the double-size Font A TOTAL line: 24 on 80mm (Font A
      double width), 16 on 58mm (W/2). */
-  var totalCols = is58 ? 16 : 24;
+  var totalCols = is58 ? Math.floor(W/2) : 24;
   var numCopies = parseInt(copies, 10) || 1;
   var feed = parseInt(feedMm, 10); if (isNaN(feed)) feed = 20;
   var out = [];
@@ -999,21 +999,16 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     size(BODY);
     bold(true);
     line(dash());
-    line(ord.orderType==='delivery' ? 'DELIVERY' : 'COLLECTION');
+    line(ord.orderType==='delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
     line(dash());
-    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('SCHEDULED ' + String(ord.scheduleTime).toUpperCase()); }
-    else { line('ASAP'); }
+    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('*** SCHEDULED ***'); line(String(ord.scheduleTime).toUpperCase()); }
+    else { line('*** ASAP ***'); }
     line(dash());
     bold(false);
 
     /* Big C / D order-type marker (right-aligned, large) — the ESC/POS stand-in
-       for the floated letter in the old HTML receipt. Rendered in Font A at
-       triple width+height so it's a clear, bold glyph. */
-    align(2); bold(true);
-    if (bodyFontB) fontA();
-    size(0x22); line(ord.orderType==='delivery' ? 'D' : 'C');
-    if (bodyFontB) fontB();
-    size(BODY); bold(false);
+       for the floated letter in the old HTML receipt. */
+    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(BODY); bold(false);
 
     /* Customer info — left aligned. */
     align(0);
@@ -1107,9 +1102,9 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  /* Blank gap between copies so each can be torn off cleanly. ~18mm of plain
+  /* Blank gap between copies so each can be torn off cleanly. ~15mm of plain
      paper feed — no text, no divider line. */
-  var INTER_COPY_DOTS = 144;
+  var INTER_COPY_DOTS = 120;
   for (var c=0;c<numCopies;c++){ buildCopy(); if (c<numCopies-1) feedDots(INTER_COPY_DOTS); }
   feedDots(feed*8);     /* trailing feed: mm -> dots @203dpi, clears the tear bar */
   lf(); lf();
