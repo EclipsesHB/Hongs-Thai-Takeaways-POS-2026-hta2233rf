@@ -468,6 +468,12 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   }
 
   function buildCopy(){
+    /* Top margin — the printer's first few dot-rows sit in the head's dead zone
+       and get clipped, so feed a little plain paper before the masthead. Without
+       this, a taller header (e.g. when the VAT lines are enabled) pushes the
+       shop name / phone off the top of the paper. Pure vertical feed: it shifts
+       the whole receipt down uniformly and changes no alignment or formatting. */
+    feedDots(24);
     /* Masthead — printer-centred so double-size text centres correctly. */
     align(1);
     bold(true); size(is58 ? 0x01 : 0x11); line("HONG'S THAI TAKEAWAY"); size(0x00); bold(false);
