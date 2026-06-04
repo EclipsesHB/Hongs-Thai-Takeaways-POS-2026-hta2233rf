@@ -482,7 +482,6 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     line('Evesham, WR11 1YP');
     if (localStorage.getItem('hongs_showvat') === '1') {
       line('VAT No: GB 490817468');
-      wrap('All prices include VAT at 20%', '').forEach(function(l){ line(l); });
     }
     if (bodyFontB) fontB();
     size(BODY);
@@ -2613,7 +2612,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
-        'Prints the VAT number (GB 490817468) and a "prices include VAT at 20%" note under the shop address on every receipt copy. Turn on when a customer asks for a VAT receipt.'
+        'Prints the VAT number (GB 490817468) under the shop address on every receipt copy. Turn on when a customer asks for a VAT receipt.'
       )
     ),
     h('div', {style:card},
