@@ -589,14 +589,12 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  /* Top margin — the print head can't mark the first band of paper right after
-     init (its dead zone), so the first line (the double-height shop name) gets
-     clipped. Plain line feeds are honoured immediately after ESC @, whereas a
-     dot-feed (ESC J) right after init is dropped by this printer's firmware.
-     Three blank lines push the masthead clear of the dead zone. Same for every
-     receipt regardless of the VAT setting; pure vertical space, no formatting
-     change. */
-  lf(); lf(); lf();
+  /* Top margin — ONLY when the VAT line is enabled. The extra VAT line makes the
+     header tall enough that the double-height shop name clips in the print head's
+     dead zone, so feed a few plain lines first (LF is honoured right after init;
+     ESC J dot-feed is not). With VAT off the header is its original height and
+     prints fine, so add nothing — keeps VAT-off output byte-identical to before. */
+  if (localStorage.getItem('hongs_showvat') === '1') { lf(); lf(); lf(); }
   /* Blank gap between copies so each can be torn off cleanly. ~15mm of plain
      paper feed — no text, no divider line. */
   var INTER_COPY_DOTS = 120;
