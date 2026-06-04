@@ -468,12 +468,15 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   }
 
   function buildCopy(){
-    /* Top margin — the printer's first few dot-rows sit in the head's dead zone
-       and get clipped, so feed a little plain paper before the masthead. Without
-       this, a taller header (e.g. when the VAT lines are enabled) pushes the
-       shop name / phone off the top of the paper. Pure vertical feed: it shifts
-       the whole receipt down uniformly and changes no alignment or formatting. */
-    feedDots(24);
+    /* Top margin — the printer clips content near the top-of-form (the dead zone
+       just past the tear bar), so feed plain paper before the masthead to push
+       the whole receipt down into the printable area. The VAT line makes the
+       header one line taller, so add extra feed when it's enabled to keep the
+       shop name from being pushed off the top. Pure vertical feed: shifts the
+       receipt down uniformly, changes no alignment, font, or formatting. */
+    var topFeed = 72;
+    if (localStorage.getItem('hongs_showvat') === '1') topFeed += 56;
+    feedDots(topFeed);
     /* Masthead — printer-centred so double-size text centres correctly. */
     align(1);
     bold(true); size(is58 ? 0x01 : 0x11); line("HONG'S THAI TAKEAWAY"); size(0x00); bold(false);
