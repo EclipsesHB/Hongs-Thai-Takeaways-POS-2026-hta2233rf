@@ -224,6 +224,532 @@ var DEF_ZONES = [
 /* Preset delivery charge options */
 var DELIVERY_PRICES = ['1.50','2.00','2.50','3.00','3.50','4.00','4.50','5.00','5.50','6.00'];
 
+/* ── RECEIPT PRINTER ────────────────────────────────────────────────────────
+   Built specifically for thermal printers via Android USB print services
+   (Vidaprinter, Looped Labs, etc) on slower hardware (Samsung Tab A 2018).
+
+   Design choices:
+   - <pre> blocks for all monospace text. Print services rasterise <pre> at
+     fixed character pitch — totally predictable, no flex/grid layout.
+   - Text alignment via space padding, not CSS positioning.
+   - Bigger TOTAL line and big C/D letter use simple block layout (table /
+     inline-block), never flex.
+   - Trailing blank lines configurable in Settings (different printer/service
+     combinations need different feed amounts).
+   - Layout is force-flushed before window.print() to guarantee the print
+     service captures the full DOM.
+─────────────────────────────────────────────────────────────────────────── */
+/* Guards against two print sequences running at once (e.g. tapping Print Last
+   while a multi-copy job is still going). Overlapping sequences would fight
+   over the shared receipt frame and corrupt each other.
+   A new request while busy is deferred and retried; a hard safety timer always
+   clears the flag so it can never get permanently stuck. */
+var _printBusy = false;
+var _printBusyTimer = null;
+
+function printReceiptHTML(ord, paperSize, copies, feedMm, printMode) {
+  var numCopies = parseInt(copies, 10) || 1;
+  var trailingFeedMm = parseInt(feedMm, 10);
+  if (isNaN(trailingFeedMm)) trailingFeedMm = 20;
+
+  if (_printBusy) {
+    /* A print is already running — retry shortly. Single-threaded JS means
+       only one caller can hold the flag, so this can't interleave. */
+    setTimeout(function(){ printReceiptHTML(ord, paperSize, copies, feedMm, printMode); }, 600);
+    return;
+  }
+  _printBusy = true;
+  function clearBusy() {
+    _printBusy = false;
+    if (_printBusyTimer) { clearTimeout(_printBusyTimer); _printBusyTimer = null; }
+  }
+  /* Hard safety net: clear the busy flag no matter what, after a generous
+     window scaled to the copy count, so a missed callback can never wedge it. */
+  _printBusyTimer = setTimeout(function(){ _printBusy = false; _printBusyTimer = null; }, 8000);
+
+  var is58 = paperSize === '58';
+  /* Two render profiles that differ in width/font sizing:
+     - USB: tuned for Looped Labs USB which renders at native printer DPI,
+            uses 72mm width on 80mm paper (fits printable area exactly).
+     - BT:  tuned for Looped Labs Bluetooth which rasterizes at fixed virtual
+            DPI then scales to paper. Uses full paper width and bigger fonts
+            to compensate for the bluetooth service's tendency to shrink
+            output, so the printed receipt fills the paper edge-to-edge. */
+  var isBT = printMode === 'bluetooth';
+  var W, mmWidth, fontSize, lineH, padTop, bigTotalFs, bigLetterFs, headerNameFs, addrFs, Wdash;
+  var mmSize = is58 ? '58mm' : '80mm';
+  if (isBT) {
+    /* Bluetooth: significantly bigger fonts. The bluetooth print service
+       rasterizes at a fixed virtual DPI then scales to paper, which shrinks
+       output by ~25-30%. We compensate with proportionally larger fonts.
+       Char-counts are reduced from USB profile to keep content within the
+       printable area at the larger font sizes:
+       - 80mm: 28 chars at 18px Courier ≈ 75mm content in 80mm paper
+       -        = ~2.5mm margin each side, comfortably centered.
+       - 58mm: 22 chars at 16px Courier ≈ 53mm content in 58mm paper. */
+    W          = is58 ? 20 : 26;
+    mmWidth    = is58 ? '49mm' : '71mm';
+    fontSize   = is58 ? '16px' : '18px';
+    lineH      = is58 ? '1.35' : '1.4';
+    padTop     = is58 ? '2mm'  : '3mm';
+    bigTotalFs = is58 ? '20px' : '24px';
+    bigLetterFs= is58 ? '44px' : '56px';
+    headerNameFs= is58? '18px' : '22px';
+    addrFs     = is58 ? '12px' : '14px';
+    Wdash      = is58 ? 20     : 26;
+  } else {
+    /* USB now uses the SAME sizing profile as Bluetooth. The print logic was
+       always identical between the two modes; only these dimensions differed,
+       and the Bluetooth values are the ones proven to print large orders
+       cleanly. Matching them gives USB the same well-behaved rendering. */
+    W          = is58 ? 20 : 26;
+    mmWidth    = is58 ? '49mm' : '71mm';
+    fontSize   = is58 ? '16px' : '18px';
+    lineH      = is58 ? '1.35' : '1.4';
+    padTop     = is58 ? '2mm'  : '3mm';
+    bigTotalFs = is58 ? '20px' : '24px';
+    bigLetterFs= is58 ? '44px' : '56px';
+    headerNameFs= is58? '18px' : '22px';
+    addrFs     = is58 ? '12px' : '14px';
+    Wdash      = is58 ? 20     : 26;
+  }
+
+  var styleEl = document.getElementById('receipt-print-style');
+  if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'receipt-print-style'; document.head.appendChild(styleEl); }
+  styleEl.textContent =
+    '@media print{' +
+      /* Fixed page height makes the page-break position deterministic so the
+         padPageBreaks() measurement pass can pad content off the seam precisely.
+         297mm matches the default the print engine already imposes on an
+         auto-height thermal page, so paper behaviour is unchanged. */
+      '@page{size:' + (is58 ? '58mm' : '80mm') + ' 297mm;margin:0;}' +
+      /* Plain block layout. The previous inline-block + text-align:center
+         centering trick caused the frame to shrink-wrap to its content,
+         ignoring the declared width and breaking layout. margin:0 auto on
+         a block element with explicit width is the simple, correct centering. */
+      '#receipt-frame{' +
+        'font-family:"Courier New",Courier,monospace;' +
+        'font-size:' + fontSize + ';' +
+        'line-height:' + lineH + ';' +
+        'font-weight:bold;' +
+        'color:#000;background:#fff;' +
+        'width:' + mmWidth + ';' +
+        'margin:0 auto;' +
+        'padding:' + padTop + ' 0 0 0;' +
+        'box-sizing:border-box;' +
+        '-webkit-print-color-adjust:exact;print-color-adjust:exact;' +
+      '}' +
+      '#receipt-frame pre{' +
+        'font-family:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;' +
+        'margin:0;padding:0;white-space:pre;word-break:normal;overflow-wrap:normal;' +
+      '}' +
+      /* Keep individual small blocks from splitting mid-content (a single <pre>
+         of items, the banner, the footer). We do NOT try to keep the whole
+         receipt on one page — instead a measurement pass (see padPageBreaks)
+         predicts where the printer's page boundary falls and inserts a blank
+         spacer so no real content ever straddles the seam. That's the reliable
+         fix: work WITH the unavoidable page break, not against it. */
+      '#receipt-frame pre, #receipt-frame .receipt-footer{' +
+        'page-break-inside:avoid;break-inside:avoid;' +
+      '}' +
+      '#receipt-frame .page-spacer{height:0;}' +
+    '}';
+
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function center(txt) {
+    var t = String(txt);
+    if (t.length >= W) return t;
+    return ' '.repeat(Math.floor((W - t.length) / 2)) + t;
+  }
+  function lineLR(left, right) {
+    var l = String(left), r = String(right);
+    var gap = W - l.length - r.length;
+    if (gap < 1) gap = 1;
+    return l + ' '.repeat(gap) + r;
+  }
+  /* dashLineWide uses Wdash from the profile selector — sized to fill the
+     paper width for that render mode so dividers reach the paper edge. */
+  function dashLineWide() { return '-'.repeat(Wdash); }
+  function wrapText(txt, indent) {
+    var prefix = indent || '';
+    var lines = [];
+    String(txt == null ? '' : txt).split('\n').forEach(function(rawLine) {
+      var words = rawLine.split(/\s+/).filter(Boolean);
+      if (words.length === 0) { lines.push(''); return; }
+      var cur = prefix;
+      var first = true;
+      words.forEach(function(w) {
+        while (w.length > W - prefix.length) {
+          if (cur.length > prefix.length) { lines.push(cur); cur = prefix; }
+          lines.push(prefix + w.slice(0, W - prefix.length));
+          w = w.slice(W - prefix.length);
+        }
+        var attempt = first ? cur + w : cur + ' ' + w;
+        if (attempt.length <= W) { cur = attempt; first = false; }
+        else { lines.push(cur); cur = prefix + w; first = false; }
+      });
+      if (cur.length > 0) lines.push(cur);
+    });
+    return lines;
+  }
+
+  function buildCopyHtml() {
+    var blocks = [];
+
+    /* Masthead (shop name + phone + address + order-type/timing banner) is ONE
+       block so the page-break padder keeps it together and never strands the
+       shop-name line at the bottom of a page (which the printer then clips).
+       Built as a wrapper div containing the centered name/address divs and the
+       banner <pre>; page-break-inside:avoid keeps it intact. */
+    var typeText = ord.orderType === 'delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***';
+    var bannerLines = [dashLineWide(), center(typeText), dashLineWide()];
+    if (ord.scheduleType === 'scheduled' && ord.scheduleTime) {
+      bannerLines.push(center('*** SCHEDULED ***'));
+      bannerLines.push(center(String(ord.scheduleTime).toUpperCase()));
+    } else {
+      bannerLines.push(center('*** ASAP ***'));
+    }
+    bannerLines.push(dashLineWide());
+    var masthead =
+      '<div style="text-align:center;font-size:' + headerNameFs + ';font-weight:bold;">' + "HONG'S THAI TAKEAWAY" + '</div>' +
+      '<pre>' + center('01386 423341') + '\n</pre>' +
+      '<div style="text-align:center;font-size:' + addrFs + ';">9 Four Pools Shopping Centre, Davies Road</div>' +
+      '<div style="text-align:center;font-size:' + addrFs + ';">Evesham, WR11 1YP</div>';
+    if (localStorage.getItem('hongs_showvat') === '1') {
+      var vatLinesH = ['VAT No: GB 490817468'].concat(wrapText('All prices include VAT at 20%', ''));
+      masthead += '<pre>' + escHtml(vatLinesH.map(center).join('\n')) + '\n</pre>';
+    }
+    masthead +=
+      '<pre>' + escHtml(bannerLines.join('\n')) + '\n</pre>';
+    blocks.push('<div class="receipt-masthead" style="page-break-inside:avoid;break-inside:avoid;">' + masthead + '</div>');
+
+    /* Customer info block + big C/D letter */
+    var bigLetter = ord.orderType === 'delivery' ? 'D' : 'C';
+    var infoLines = [];
+    /* Customer info — handwriting blank lines under Name, Tel, and Address only.
+       Date and Time are always populated by the system, so no blank needed. */
+    infoLines.push('Date : ' + (ord.date || ''));
+    infoLines.push('Time : ' + (ord.time || ''));
+    infoLines.push('Name : ' + (ord.customer.name || ''));
+    infoLines.push('');
+    infoLines.push('Tel  : ' + (ord.customer.phone || ''));
+    infoLines.push('');
+    if (ord.orderType === 'delivery') {
+      var addrParts = ord.customer.address
+        ? String(ord.customer.address).split(/[\n,]+/).map(function(s){ return s.trim(); }).filter(Boolean)
+        : [''];
+      if (addrParts.length === 0) addrParts = [''];
+      /* Wrap the address to a width that LEAVES ROOM for the big C/D letter that
+         sits in the cell to the right of this text. If we wrap to the full line
+         width, the address column (which is narrower than the paper because of
+         the letter cell) re-wraps it in the browser — producing the double-wrap
+         where the postcode lands on its own line (seen on Bluetooth, whose big
+         font makes the column narrowest). Reserve a few chars; the continuation
+         prefix is 7 chars and the first line's "Addr : " is also 7, so wrapping
+         to Waddr keeps everything within the visible column with no re-wrap. */
+      var addrReserve = 8;   /* match BT: USB now uses BT sizing */
+      var Waddr = W - addrReserve;
+      function wrapAddr(p, prefix) {
+        var lines = [];
+        var words = String(p == null ? '' : p).split(/\s+/).filter(Boolean);
+        if (words.length === 0) return [prefix];
+        var cur = prefix, first = true;
+        words.forEach(function(wd) {
+          while (wd.length > Waddr - prefix.length) {
+            if (cur.length > prefix.length) { lines.push(cur); cur = prefix; }
+            lines.push(prefix + wd.slice(0, Waddr - prefix.length));
+            wd = wd.slice(Waddr - prefix.length);
+          }
+          var attempt = first ? cur + wd : cur + ' ' + wd;
+          if (attempt.length <= Waddr) { cur = attempt; first = false; }
+          else { lines.push(cur); cur = prefix + wd; first = false; }
+        });
+        if (cur.length > 0) lines.push(cur);
+        return lines;
+      }
+      addrParts.forEach(function(p) {
+        var ws = wrapAddr(p, '       ');
+        if (ws.length === 0) ws = ['       '];
+        ws.forEach(function(w, j) {
+          infoLines.push(j === 0 ? 'Addr : ' + w.slice(7) : w);
+        });
+      });
+      infoLines.push('');
+    }
+    var bigLetterCellW = is58 ? '40px' : '52px';
+    blocks.push(
+      '<div style="margin-top:4px;">' +
+        '<table style="width:100%;border-collapse:collapse;border:0;table-layout:fixed;">' +
+          '<tr>' +
+            '<td style="vertical-align:top;padding:0;">' +
+              '<pre style="white-space:pre;">' + escHtml(infoLines.join('\n')) + '</pre>' +
+            '</td>' +
+            '<td style="vertical-align:top;padding:0 10px 0 0;width:' + bigLetterCellW + ';min-width:' + bigLetterCellW + ';text-align:right;font-size:' + bigLetterFs + ';font-weight:900;line-height:1;">' +
+              bigLetter +
+            '</td>' +
+          '</tr>' +
+        '</table>' +
+      '</div>'
+    );
+    /* Separator after customer info block */
+    blocks.push('<pre>' + dashLineWide() + '\n</pre>');
+
+    if (ord.customer.notes && ord.customer.notes.trim()) {
+      var noteLines = ['NOTE:'];
+      wrapText(ord.customer.notes, '').forEach(function(l) { noteLines.push(l); });
+      noteLines.push(dashLineWide());
+      blocks.push('<pre>' + escHtml(noteLines.join('\n')) + '\n</pre>');
+    }
+
+    if (ord.paymentType) {
+      var payText = lineLR('Payment', ord.paymentType === 'card' ? 'CARD' : 'CASH');
+      blocks.push('<pre>' + escHtml(payText) + '\n' + dashLineWide() + '\n</pre>');
+    }
+
+    /* QTY/ITEM header as its own block. */
+    blocks.push('<pre>' + escHtml(lineLR('QTY  ITEM', 'AMT') + '\n' + dashLineWide()) + '\n</pre>');
+    /* Each item is its OWN <pre> block so the page-break padder can move whole
+       items cleanly between pages (a single giant items <pre> could only be
+       moved as one unit, wasting a page). Each block holds the item's name
+       line(s), any extra/comment lines, and a trailing blank for spacing. */
+    ord.items.forEach(function(item) {
+      var extraAmt = parseFloat(item.extra) || 0;
+      var amt = item.price * item.qty + extraAmt;
+      var amtStr = '\u00a3' + amt.toFixed(2);
+      var qtyStr = item.qty + ' x ';
+      var firstWidth = W - qtyStr.length - amtStr.length - 1;
+      if (firstWidth < 6) firstWidth = 6;
+      var contIndent = '     ';
+      var contWidth = W - contIndent.length;
+
+      var name = String(item.name || '');
+      var chunks = [];
+      var remaining = name;
+      var firstChunkDone = false;
+      while (remaining.length > 0) {
+        var budget = firstChunkDone ? contWidth : firstWidth;
+        if (remaining.length <= budget) { chunks.push(remaining); break; }
+        var slice = remaining.slice(0, budget);
+        var breakAt = slice.lastIndexOf(' ');
+        if (breakAt > 0) {
+          chunks.push(remaining.slice(0, breakAt));
+          remaining = remaining.slice(breakAt + 1);
+        } else {
+          chunks.push(slice);
+          remaining = remaining.slice(budget);
+        }
+        firstChunkDone = true;
+      }
+      if (chunks.length === 0) chunks = [''];
+
+      var oneItem = [];
+      oneItem.push(lineLR(qtyStr + chunks[0], amtStr));
+      for (var i = 1; i < chunks.length; i++) oneItem.push(contIndent + chunks[i]);
+      if (extraAmt > 0 && !item.custom) oneItem.push('  + Extra: \u00a3' + extraAmt.toFixed(2));
+      if (item.comment && item.comment.trim()) {
+        item.comment.trim().split('\n').forEach(function(l) {
+          if (l.trim()) wrapText(l.trim(), '  > ').forEach(function(w) { oneItem.push(w); });
+        });
+      }
+      /* Bottom margin gives a clear, consistent gap between items (a bare blank
+         line inside the <pre> collapses against the next block). ~6px ≈ one
+         blank text line, matching the original spacing. */
+      blocks.push('<pre style="margin:0 0 10px 0;padding:0;">' + escHtml(oneItem.join('\n')) + '</pre>');
+    });
+
+    var foodTotalAmt = parseFloat(ord.foodTotal) || 0;
+    var deliveryAmt = parseFloat(ord.deliveryCharge) || 0;
+    var discountAmt2 = parseFloat(ord.discountAmt) || 0;
+    var safeTotal = parseFloat(ord.total);
+    if (isNaN(safeTotal)) safeTotal = Math.max(0, foodTotalAmt + deliveryAmt - discountAmt2);
+    safeTotal = Math.max(0, safeTotal);
+    var showSubtotal = deliveryAmt > 0 || discountAmt2 > 0;
+
+    /* ── Footer group: the leading divider, the Subtotal/Delivery/Discount
+       lines, the divider, the big TOTAL line and the closing divider are all
+       wrapped in ONE container with page-break-inside:avoid. This keeps the
+       whole footer on a single page so a page break can never land between the
+       items and the summary and silently swallow the divider that sits there
+       (the bug where the line above Subtotal vanished). */
+    var footer = '';
+    /* Leading divider (was previously the items block's trailing divider). */
+    footer += '<pre>' + dashLineWide() + '\n</pre>';
+    if (showSubtotal) {
+      var summaryLines = [];
+      summaryLines.push(lineLR('Subtotal', '\u00a3' + foodTotalAmt.toFixed(2)));
+      if (deliveryAmt > 0) summaryLines.push(lineLR('Delivery', '\u00a3' + deliveryAmt.toFixed(2)));
+      /* Discount label: percentage shows '-10%'; custom/legacy falls back to £. */
+      if (discountAmt2 > 0) {
+        var discLabel;
+        if (ord.discount && ord.discount.type === 'pct' && ord.discount.pct > 0) {
+          discLabel = '-' + ord.discount.pct + '%';
+        } else {
+          discLabel = '-\u00a3' + discountAmt2.toFixed(2);
+        }
+        summaryLines.push(lineLR('Discount', discLabel));
+      }
+      summaryLines.push(dashLineWide());
+      footer += '<pre>' + escHtml(summaryLines.join('\n')) + '\n</pre>';
+    }
+    /* TOTAL line: 50/50 inline-block split — fits the frame width at any font
+       size and keeps the big amount flush right. */
+    footer += '<div style="font-size:' + bigTotalFs + ';font-weight:bold;padding:2px 0;">' +
+        '<span style="display:inline-block;width:50%;">TOTAL</span>' +
+        '<span style="display:inline-block;width:50%;text-align:right;">\u00a3' + safeTotal.toFixed(2) + '</span>' +
+      '</div>';
+    footer += '<pre>' + dashLineWide() + '\n</pre>';
+    /* The inline style mirrors the print-CSS page-break rules so the avoid
+       behaviour holds even if a service ignores the stylesheet selector. */
+    blocks.push('<div class="receipt-footer" style="page-break-inside:avoid;break-inside:avoid;">' + footer + '</div>');
+
+    return '<div class="receipt-copy">' + blocks.join('') + '</div>';
+  }
+
+  /* ── Trailing feed, emitted as a sibling AFTER the receipt copy (never inside
+     it, so the copy's layout box can't clip it). Uses readable-height lines
+     with a visible character per row: print services strip pure whitespace and
+     can collapse near-zero-height elements, so each row carries a real glyph at
+     a real line-height the service must feed. Rows scale with the user's mm
+     setting, with a safe floor so the last line (TOTAL) always clears the tear
+     bar even on large orders. ~5mm per row. */
+  function buildFeedHtml() {
+    var rows = Math.max(8, Math.ceil(trailingFeedMm / 5));
+    var glyphs = ['.', ',', '\u00b7', '.', ',', '\u00b7'];
+    var s = '';
+    for (var i = 0; i < rows; i++) s += glyphs[i % glyphs.length] + '\n';
+    return '<pre class="receipt-feed" style="font-size:9px;line-height:5mm;margin:0;padding:0;">' + s + '</pre>';
+  }
+
+  var frame = document.getElementById('receipt-frame');
+
+  /* Build ALL copies into ONE continuous document, printed with a SINGLE
+     window.print() (one preview per press). Copies are separated by a feed gap.
+     A measurement pass then pads any content that would straddle a page seam. */
+  var allHtml = [];
+  for (var ci = 0; ci < numCopies; ci++) {
+    allHtml.push(buildCopyHtml());
+    allHtml.push(buildFeedHtml());
+  }
+  frame.innerHTML = allHtml.join('');
+
+  /* Force synchronous layout so measurements + the print snapshot are correct. */
+  var _h = frame.offsetHeight; void _h;
+  var _h2 = frame.scrollHeight; void _h2;
+
+  /* ── Page-break padding ──
+     The Android print service WILL paginate a tall receipt, and whichever
+     element lands on the page boundary gets mangled (overlap / dropped line).
+     Rather than fight it, we predict the boundary and insert a blank spacer so
+     the boundary falls in blank space and every real block sits wholly on one
+     page. Uses the real rendered page height in px derived from the fixed
+     297mm @page (so it tracks the actual layout, whatever the font/zoom). */
+  function padPageBreaks() {
+    try {
+      /* Derive pixels-per-mm from the frame's own rendered width vs its mm width
+         so the page-height calc matches the actual print scale. */
+      var frameW = frame.getBoundingClientRect().width;
+      var mmW = parseFloat(mmWidth);            /* e.g. 72 or 75 or 48 or 53 */
+      if (!frameW || !mmW) return;
+      var pxPerMm = frameW / mmW;
+      var pagePx = 297 * pxPerMm;               /* matches @page height */
+      if (!isFinite(pagePx) || pagePx <= 0) return;
+      /* Safety zone at the bottom of each page. The print service's real usable
+         page height is a touch less than pagePx (rounding + printer margins), so
+         a block whose bottom lands in the last few mm gets clipped at the cut
+         edge (the "Evesham WR11 1YP" cut-off). Treat that zone as off-limits:
+         any block reaching into it is padded to the next page. ~5mm is enough to
+         clear the edge while staying visually negligible. */
+      var safetyPx = 12 * pxPerMm;
+      var usablePx = pagePx - safetyPx;
+
+      /* Collect the paddable LEAF blocks in document order. Each copy is wrapped
+         in a .receipt-copy div, so we must descend into those (and the feed
+         block) rather than treating the wrapper as one atomic unit — otherwise
+         a tall block inside a copy (e.g. the header) straddles the seam and gets
+         cut. Helper returns the ordered list of blocks we may pad before. */
+      function collectBlocks(parent, out) {
+        var ch = parent.firstChild;
+        while (ch) {
+          if (ch.nodeType === 1) {
+            if (ch.className && String(ch.className).indexOf('receipt-copy') > -1) {
+              collectBlocks(ch, out);   /* descend into a copy wrapper */
+            } else {
+              out.push(ch);
+            }
+          }
+          ch = ch.nextSibling;
+        }
+      }
+
+      /* Pad in passes: after inserting a spacer, positions below shift, so we
+         re-collect and re-scan until no block straddles (or the guard trips). */
+      var guard = 0;
+      var changed = true;
+      while (changed && guard < 400) {
+        changed = false;
+        var blocksList = [];
+        collectBlocks(frame, blocksList);
+        var frameTop = frame.getBoundingClientRect().top;
+        for (var bi = 0; bi < blocksList.length; bi++) {
+          guard++;
+          var el = blocksList[bi];
+          /* Never pad before a spacer or the trailing feed: the feed is just
+             decorative dots that can sit at a page edge, and padding it would
+             waste paper and risk cascading spacers. */
+          var cls = el.className ? String(el.className) : '';
+          if (cls.indexOf('page-spacer') > -1 || cls.indexOf('receipt-feed') > -1) continue;
+          var r = el.getBoundingClientRect();
+          var top = r.top - frameTop;
+          var bottom = r.bottom - frameTop;
+          var pageOfTop = Math.floor(top / pagePx);
+          /* Use the USABLE bottom (page height minus the safety zone) to decide
+             straddling: if this block's bottom reaches past its page's usable
+             area, it would touch the cut edge, so push it to the next page. */
+          var pageOfBottom = Math.floor((bottom - 0.5) / pagePx);
+          var usableBottomOfTopPage = pageOfTop * pagePx + usablePx;
+          var entersSafetyZone = bottom > usableBottomOfTopPage;
+          if ((pageOfBottom > pageOfTop || entersSafetyZone) && (bottom - top) < usablePx) {
+            var nextBoundary = (pageOfTop + 1) * pagePx;
+            var gap = nextBoundary - top;
+            if (gap > 0.5) {
+              var spacer = document.createElement('div');
+              spacer.className = 'page-spacer';
+              spacer.style.height = gap + 'px';
+              spacer.style.width = '100%';
+              el.parentNode.insertBefore(spacer, el);
+              frame.offsetHeight; /* reflow */
+              changed = true;
+              break;            /* re-collect from the top after the shift */
+            }
+          }
+        }
+      }
+    } catch (e) { /* measurement is best-effort; printing proceeds regardless */ }
+  }
+
+  function firePrint() {
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        padPageBreaks();
+        /* Reflow once more so the print snapshot includes the spacers. */
+        frame.offsetHeight;
+        setTimeout(function() {
+          try { window.print(); } catch(e) { console.error('print failed', e); }
+          clearBusy();
+        }, 200);
+      });
+    });
+  }
+
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(firePrint, firePrint);
+  } else {
+    setTimeout(firePrint, 100);
+  }
+}
+
 /* ── DIRECT THERMAL PRINTING (ESC/POS over WebUSB / Web Bluetooth) ───────────
    Replaces the Looped Labs / Android print-service path entirely. Raw ESC/POS
    bytes are streamed straight to the printer's hardware endpoint, so there is
@@ -474,25 +1000,24 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     line('01386 423341');
     line('9 Four Pools Shopping Centre, Davies Road');
     line('Evesham, WR11 1YP');
+    if (localStorage.getItem('hongs_showvat') === '1') {
+      line('VAT No: GB 490817468');
+      wrap('All prices include VAT at 20%', '').forEach(function(l){ line(l); });
+    }
     if (bodyFontB) fontB();
     size(BODY);
     bold(true);
     line(dash());
-    line(ord.orderType==='delivery' ? 'DELIVERY' : 'COLLECTION');
+    line(ord.orderType==='delivery' ? '*** DELIVERY ***' : '*** COLLECTION ***');
     line(dash());
-    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('SCHEDULED ' + String(ord.scheduleTime).toUpperCase()); }
-    else { line('ASAP'); }
+    if (ord.scheduleType==='scheduled' && ord.scheduleTime){ line('*** SCHEDULED ***'); line(String(ord.scheduleTime).toUpperCase()); }
+    else { line('*** ASAP ***'); }
     line(dash());
     bold(false);
 
     /* Big C / D order-type marker (right-aligned, large) — the ESC/POS stand-in
-       for the floated letter in the old HTML receipt. Font A triple width+height
-       so it's a clear, bold glyph; switch back to the body font afterwards. */
-    align(2); bold(true);
-    if (bodyFontB) fontA();
-    size(0x22); line(ord.orderType==='delivery' ? 'D' : 'C');
-    if (bodyFontB) fontB();
-    size(BODY); bold(false);
+       for the floated letter in the old HTML receipt. */
+    align(2); bold(true); size(0x11); line(ord.orderType==='delivery' ? 'D' : 'C'); size(BODY); bold(false);
 
     /* Customer info — left aligned. */
     align(0);
@@ -595,10 +1120,12 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
   return Uint8Array.from(out);
 }
 
-/* Build ESC/POS bytes and stream them to the connected printer. No
-   window.print(), no Android preview, so long orders can't be clipped. The
-   printMode argument is accepted only for call-site compatibility; the live
-   transport is whatever the user connected in Settings. */
+/* New print path: build ESC/POS bytes and stream them to the connected printer.
+   No window.print(), no Android preview, so long orders can't be clipped.
+   (The old HTML/print-service routine survives as printReceiptHTML for
+   reference but is no longer wired to any button.) The printMode argument is
+   accepted only for call-site compatibility; the live transport is whatever the
+   user connected in Settings. */
 function printReceipt(ord, paperSize, copies, feedMm, printMode) {
   var bytes;
   try { bytes = buildReceiptBytes(ord, paperSize, copies, feedMm); }
@@ -2581,6 +3108,31 @@ function BackupRestore(props) {
         'When Cash is selected, the basket shows the change due if the customer paid the next multiple of this amount. \u00a320 fits most takeaway orders.'
       )
     ),
+    /* VAT number on receipts — when enabled, the VAT line prints under the
+       shop address on every copy of every receipt. Reads/writes a simple
+       localStorage flag the print builders check directly. */
+    h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
+      h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83e\uddfe VAT NUMBER ON RECEIPTS'),
+      h('div', {style:{display:'flex',gap:8}},
+        [{v:true,t:'On'},{v:false,t:'Off'}].map(function(o) {
+          var active = props.showVat === o.v;
+          return h('button', {
+            key: o.t, className:'mbtn',
+            onClick: function(){ props.setShowVat(o.v); },
+            style:{
+              flex:1, padding:'10px 0', borderRadius:9,
+              border:'1px solid ' + (active ? C.accent : C.border),
+              background: active ? C.accentBg : 'transparent',
+              color: active ? C.accent : C.text,
+              fontWeight:700, fontSize:13, cursor:'pointer'
+            }
+          }, o.t);
+        })
+      ),
+      h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
+        'Prints the VAT number (GB 490817468) and a "prices include VAT at 20%" note under the shop address on every receipt copy. Turn on when a customer asks for a VAT receipt.'
+      )
+    ),
     h('div', {style:card},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\u2b07\ufe0f EXPORT BACKUP'),
       h('button', {className:'mbtn', onClick:doExport, style:{width:'100%',padding:'11px 18px',borderRadius:9,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:C.accent,color:C.bg}}, 'Download Backup File'),
@@ -2665,6 +3217,7 @@ function App() {
      hint for a Cash order. Default £20. On-screen only; never on the receipt. */
   var cashRoundState = useState(function(){ return localStorage.getItem('hongs_cashround') || '20'; }); var cashRound = cashRoundState[0]; var setCashRound = cashRoundState[1];
   var printModeState = useState(function(){ return localStorage.getItem('hongs_printmode') || 'usb'; }); var printMode = printModeState[0]; var setPrintMode = printModeState[1];
+  var showVatState = useState(function(){ return localStorage.getItem('hongs_showvat') === '1'; }); var showVat = showVatState[0]; var setShowVat = showVatState[1];
   var scheduleTypeState = useState(function(){ return localStorage.getItem('hongs_basket_schtype')||'asap'; }); var scheduleType = scheduleTypeState[0]; var setScheduleType = scheduleTypeState[1];
   var scheduleTimeState = useState(function(){ return localStorage.getItem('hongs_basket_schtime')||''; }); var scheduleTime = scheduleTimeState[0]; var setScheduleTime = scheduleTimeState[1];
   /* discount: {type: null|'pct'|'custom', pct: number, custom: string} */
@@ -2689,6 +3242,7 @@ function App() {
   useEffect(function(){ lsSet('hongs_feedmm', feedMm); }, [feedMm]);
   useEffect(function(){ lsSet('hongs_cashround', cashRound); }, [cashRound]);
   useEffect(function(){ lsSet('hongs_printmode', printMode); }, [printMode]);
+  useEffect(function(){ lsSet('hongs_showvat', showVat ? '1' : '0'); }, [showVat]);
   useEffect(function(){ lsSetJson('hongs_basket_order', order); }, [order]);
   useEffect(function(){ lsSetJson('hongs_basket_customer', customer); }, [customer]);
   useEffect(function(){ lsSet('hongs_basket_ordertype', orderType); }, [orderType]);
@@ -2885,7 +3439,7 @@ function App() {
 
   var okBanner = showOk && h('div', {style:{background:'#1e3a28',color:'#70e890',textAlign:'center',padding:9,fontWeight:700,fontSize:13,flexShrink:0}}, '✅ Order placed!');
 
-  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode,cashRound:cashRound,setCashRound:setCashRound};
+  var backupProps = {menuItems:menuItems,zones:zones,orders:orders,setMenuItems:setMenuItems,setZones:setZones,setOrders:setOrders,paperSize:paperSize,setPaperSize:setPaperSize,copies:copies,setCopies:setCopies,feedMm:feedMm,setFeedMm:setFeedMm,printMode:printMode,setPrintMode:setPrintMode,cashRound:cashRound,setCashRound:setCashRound,showVat:showVat,setShowVat:setShowVat};
   var printModalState = useState(null); var printModal = printModalState[0]; var setPrintModal = printModalState[1];
 
   /* App-wide printer status so a "Reconnect" pill can appear anywhere when the
