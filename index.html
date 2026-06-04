@@ -474,9 +474,7 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
     line('01386 423341');
     line('9 Four Pools Shopping Centre, Davies Road');
     line('Evesham, WR11 1YP');
-    if (localStorage.getItem('hongs_showvat') === '1') {
-      line('VAT No: GB 490817468');
-    }
+    if (localStorage.getItem('hongs_showvat') === '1') { line('VAT No: GB 490817468'); }
     if (bodyFontB) fontB();
     size(BODY);
     bold(true);
@@ -589,12 +587,6 @@ function buildReceiptBytes(ord, paperSize, copies, feedMm) {
 
   raw(0x1B,0x40);       /* init */
   raw(0x1B,0x74,0x00);  /* code page CP437 (£ = 0x9C) */
-  /* Top margin — ONLY when the VAT line is enabled. The extra VAT line makes the
-     header tall enough that the double-height shop name clips in the print head's
-     dead zone, so feed a few plain lines first (LF is honoured right after init;
-     ESC J dot-feed is not). With VAT off the header is its original height and
-     prints fine, so add nothing — keeps VAT-off output byte-identical to before. */
-  if (localStorage.getItem('hongs_showvat') === '1') { lf(); lf(); lf(); }
   /* Blank gap between copies so each can be torn off cleanly. ~15mm of plain
      paper feed — no text, no divider line. */
   var INTER_COPY_DOTS = 120;
@@ -2590,9 +2582,9 @@ function BackupRestore(props) {
         'When Cash is selected, the basket shows the change due if the customer paid the next multiple of this amount. \u00a320 fits most takeaway orders.'
       )
     ),
-    /* VAT number on receipts — when enabled, the VAT line prints under the
-       shop address on every copy of every receipt. Reads/writes a simple
-       localStorage flag the print builder checks directly. */
+    /* VAT number on receipts — when On, prints "VAT No: GB 490817468" under the
+       shop address on every receipt copy. Off by default. Reads/writes a simple
+       localStorage flag that the receipt builder checks. */
     h('div', {style:{background:C.card,borderRadius:12,padding:16,border:'1px solid ' + C.border,marginBottom:14}},
       h('div', {style:{fontSize:11,fontWeight:700,color:C.text,letterSpacing:1.5,marginBottom:10}}, '\ud83e\uddfe VAT NUMBER ON RECEIPTS'),
       h('div', {style:{display:'flex',gap:8}},
@@ -2612,7 +2604,7 @@ function BackupRestore(props) {
         })
       ),
       h('div', {style:{fontSize:12,color:C.dim,marginTop:10}},
-        'Prints the VAT number (GB 490817468) under the shop address on every receipt copy. Turn on when a customer asks for a VAT receipt.'
+        'Prints VAT No: GB 490817468 under the shop address on every receipt copy. Turn on when a customer asks for a VAT receipt.'
       )
     ),
     h('div', {style:card},
