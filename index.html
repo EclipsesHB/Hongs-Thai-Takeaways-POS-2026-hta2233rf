@@ -371,7 +371,20 @@ var ThermalPrinter = (function () {
     if (!s.connected) throw new Error('Printer not connected.');
     if (s.kind==='usb'){
       var CH=4096;
-      for (var o=0;o<data.length;o+=CH){
+      var startAt=0;
+      /* Cold-start settle: a receipt stream begins with ESC @ (init), which
+         resets the printer's motor/heater. On a cold unit it needs a moment
+         before it can mark the first dots, so the first line — the tall,
+         double-height shop name — can be partly dropped. This only affects the
+         1st copy (later copies are mid-stream, not after an init). Send the init
+         on its own, pause briefly so the printer wakes, then stream the rest.
+         No paper feed and no blank lines: invisible on the receipt. */
+      if (data.length>=2 && data[0]===0x1B && data[1]===0x40){
+        await s.device.transferOut(s.ep, data.subarray(0,2));
+        await wait(120);
+        startAt=2;
+      }
+      for (var o=startAt;o<data.length;o+=CH){
         var chunk=data.subarray(o, o+CH);
         var res=await s.device.transferOut(s.ep, chunk);
         if (res && res.status==='stall'){ try{ await s.device.clearHalt('out', s.ep); }catch(e){} await s.device.transferOut(s.ep, chunk); }
