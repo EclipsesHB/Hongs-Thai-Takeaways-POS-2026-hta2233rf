@@ -1,0 +1,25 @@
+{
+  "name": "Hong's Thai Takeaway — POS",
+  "short_name": "Hong's POS",
+  "description": "Point of Sale system for Hong's Thai Takeaway",
+  "start_url": "./Hongs_Thai_POS_NEW_P_FINAL.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
