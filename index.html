@@ -105,119 +105,109 @@ var ICONS = {
 };
 
 var MENU = [
-  {id:1,  num:'1',  name:'Prawn Crackers',                       cat:'Starters',  price:3.00},
-  {id:2,  num:'2',  name:'Chicken on Toast',                     cat:'Starters',  price:6.50},
-  {id:3,  num:'3',  name:'Chicken Satay',                     cat:'Starters',  price:6.50},
-  {id:4,  num:'4',  name:'Prawn Tempura',                        cat:'Starters',  price:6.95},
-  {id:5,  num:'5',  name:'Fish Cakes',                           cat:'Starters',  price:6.50},
-  {id:6,  num:'6',  name:'Spring Roll (V)',                      cat:'Starters',  price:5.95},
-  {id:7,  num:'7',  name:'Pork Dumpling Savoury',                cat:'Starters',  price:6.95},
-  {id:8,  num:'8',  name:'Vegetable Tempura (V)',                cat:'Starters',  price:5.95},
-  {id:9,  num:'9',  name:'Duck Spring Rolls',                    cat:'Starters',  price:6.95},
-  {id:10, num:'10', name:'Crispy Wanton',                        cat:'Starters',  price:5.95},
-  {id:11, num:'11', name:'Gadoog Moo Yang',                      cat:'Starters',  price:6.95},
-  {id:12, num:'12', name:'Gung Hom Pa',                          cat:'Starters',  price:6.95},
-  {id:13, num:'13', name:'Chicken Wing',                         cat:'Starters',  price:6.50},
-  {id:131,num:'13a',name:'Salt & Pepper Squid',                  cat:'Starters',  price:6.95},
-  {id:14, num:'14', name:'Sharing Platter (x2)',                 cat:'Starters',  price:12.95},
-
-  {id:15, num:'15', name:'Thai Green Curry — Prawn',          cat:'Curry', grp:'Thai Green Curry',   price:10.50},
-  {id:151,num:'15', name:'Thai Green Curry — Chicken',   cat:'Curry', grp:'Thai Green Curry',   price:9.50},
-  {id:651,num:'15', name:'Thai Green Curry — Pork',      cat:'Curry', grp:'Thai Green Curry',   price:9.50},
-  {id:152,num:'15', name:'Thai Green Curry — Beef',           cat:'Curry', grp:'Thai Green Curry',   price:10.50},
-  {id:153,num:'15', name:'Thai Green Curry — Veg (V)',        cat:'Curry', grp:'Thai Green Curry',   price:8.95},
-  {id:16, num:'16', name:'Thai Red Curry — Prawn',          cat:'Curry', grp:'Thai Red Curry',  price:10.50},
-  {id:161,num:'16', name:'Thai Red Curry — Chicken',   cat:'Curry', grp:'Thai Red Curry',  price:9.50},
-  {id:661,num:'16', name:'Thai Red Curry — Pork',      cat:'Curry', grp:'Thai Red Curry',  price:9.50},
-  {id:162,num:'16', name:'Thai Red Curry — Beef',           cat:'Curry', grp:'Thai Red Curry',  price:10.50},
-  {id:163,num:'16', name:'Thai Red Curry — Veg (V)',        cat:'Curry', grp:'Thai Red Curry',  price:8.95},
-  {id:17, num:'17', name:'Massaman Curry — Prawn',            cat:'Curry', grp:'Massaman Curry',     price:10.50},
-  {id:171,num:'17', name:'Massaman Curry — Chicken',     cat:'Curry', grp:'Massaman Curry',     price:9.50},
-  {id:671,num:'17', name:'Massaman Curry — Pork',        cat:'Curry', grp:'Massaman Curry',     price:9.50},
-  {id:172,num:'17', name:'Massaman Curry — Beef',             cat:'Curry', grp:'Massaman Curry',     price:10.50},
-  {id:173,num:'17', name:'Massaman Curry — Veg (V)',          cat:'Curry', grp:'Massaman Curry',     price:8.95},
-  {id:18, num:'18', name:'Paneang Curry — Prawn',           cat:'Curry', grp:'Paneang Curry',   price:10.50},
-  {id:181,num:'18', name:'Paneang Curry — Chicken',    cat:'Curry', grp:'Paneang Curry',   price:9.50},
-  {id:681,num:'18', name:'Paneang Curry — Pork',       cat:'Curry', grp:'Paneang Curry',   price:9.50},
-  {id:182,num:'18', name:'Paneang Curry — Beef',            cat:'Curry', grp:'Paneang Curry',   price:10.50},
-  {id:183,num:'18', name:'Paneang Curry — Veg (V)',         cat:'Curry', grp:'Paneang Curry',   price:8.95},
-  {id:19, num:'19', name:'Yellow Curry — Prawn',                  cat:'Curry', grp:'Yellow Curry',          price:10.50},
-  {id:191,num:'19', name:'Yellow Curry — Chicken',           cat:'Curry', grp:'Yellow Curry',          price:9.50},
-  {id:691,num:'19', name:'Yellow Curry — Pork',              cat:'Curry', grp:'Yellow Curry',          price:9.50},
-  {id:192,num:'19', name:'Yellow Curry — Beef',                   cat:'Curry', grp:'Yellow Curry',          price:10.50},
-  {id:193,num:'19', name:'Yellow Curry — Veg (V)',                cat:'Curry', grp:'Yellow Curry',          price:8.95},
-
-  {id:20, num:'20', name:'Pad Khing — Duck',                      cat:'Stir Fried', grp:'Pad Khing',              price:11.50},
-  {id:201,num:'20', name:'Pad Khing — Prawn',                  cat:'Stir Fried', grp:'Pad Khing',              price:10.50},
-  {id:901,num:'20', name:'Pad Khing — Beef',                   cat:'Stir Fried', grp:'Pad Khing',              price:10.50},
-  {id:202,num:'20', name:'Pad Khing — Chicken',              cat:'Stir Fried', grp:'Pad Khing',              price:9.50},
-  {id:702,num:'20', name:'Pad Khing — Pork',                 cat:'Stir Fried', grp:'Pad Khing',              price:9.50},
-  {id:203,num:'20', name:'Pad Khing — Veg (V)',                   cat:'Stir Fried', grp:'Pad Khing',              price:8.95},
-  {id:21, num:'21', name:'Pad Gra Pao — Duck',            cat:'Stir Fried', grp:'Pad Gra Pao',   price:11.50},
-  {id:211,num:'21', name:'Pad Gra Pao — Prawn',           cat:'Stir Fried', grp:'Pad Gra Pao',   price:10.50},
-  {id:212,num:'21', name:'Pad Gra Pao — Chicken',    cat:'Stir Fried', grp:'Pad Gra Pao',   price:9.50},
-  {id:712,num:'21', name:'Pad Gra Pao — Pork',       cat:'Stir Fried', grp:'Pad Gra Pao',   price:9.50},
-  {id:213,num:'21', name:'Pad Gra Pao — Beef',            cat:'Stir Fried', grp:'Pad Gra Pao',   price:10.50},
-  {id:214,num:'21', name:'Pad Gra Pao — Veg (V)',         cat:'Stir Fried', grp:'Pad Gra Pao',   price:8.95},
-  {id:22, num:'22', name:'Cashew Nut — Prawn',                 cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:10.50},
-  {id:221,num:'22', name:'Cashew Nut — Chicken',          cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:9.50},
-  {id:721,num:'22', name:'Cashew Nut — Pork',             cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:9.50},
-  {id:222,num:'22', name:'Cashew Nut — Beef',                  cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:10.50},
-  {id:223,num:'22', name:'Cashew Nut — Veg (V)',               cat:'Stir Fried', grp:'Cashew Nut Stir Fry', price:8.95},
-  {id:23, num:'23', name:'Mixed Veg Stir Fry (V)',                 cat:'Stir Fried',                               price:8.95},
-  {id:24, num:'24', name:'Sweet & Sour — Prawn',                   cat:'Stir Fried', grp:'Sweet & Sour',          price:10.50},
-  {id:241,num:'24', name:'Sweet & Sour — Chicken',            cat:'Stir Fried', grp:'Sweet & Sour',          price:9.50},
-  {id:741,num:'24', name:'Sweet & Sour — Pork',               cat:'Stir Fried', grp:'Sweet & Sour',          price:9.50},
-  {id:242,num:'24', name:'Sweet & Sour — Beef',                    cat:'Stir Fried', grp:'Sweet & Sour',          price:10.50},
-  {id:243,num:'24', name:'Sweet & Sour — Veg (V)',                 cat:'Stir Fried', grp:'Sweet & Sour',          price:8.95},
-  {id:25, num:'25', name:'Oyster Sauce — Prawn',                   cat:'Stir Fried', grp:'Oyster Sauce',          price:10.50},
-  {id:251,num:'25', name:'Oyster Sauce — Chicken',            cat:'Stir Fried', grp:'Oyster Sauce',          price:9.50},
-  {id:751,num:'25', name:'Oyster Sauce — Pork',               cat:'Stir Fried', grp:'Oyster Sauce',          price:9.50},
-  {id:252,num:'25', name:'Oyster Sauce — Beef',                    cat:'Stir Fried', grp:'Oyster Sauce',          price:10.50},
-  {id:253,num:'25', name:'Oyster Sauce — Veg (V)',                 cat:'Stir Fried', grp:'Oyster Sauce',          price:8.95},
-
-  {id:26, num:'26', name:'Tamarind Duck',                          cat:'Duck',        price:11.50},
-  {id:27, num:'27', name:'Red Duck Curry',                   cat:'Duck',        price:11.50},
-
-  {id:28, num:'28', name:'Sea Bass Pad Khing',                     cat:'Fish', price:12.50},
-  {id:29, num:'29', name:'Sea Bass Pad Gra Pao',          cat:'Fish', price:12.50},
-  {id:30, num:'30', name:'Steamed Sea Bass Fillet',                cat:'Fish', price:12.50},
-
-  {id:31, num:'31', name:'Phad Thai — Prawn',                  cat:'Noodles', grp:'Phad Thai', price:8.50},
-  {id:311,num:'31', name:'Phad Thai — Beef',                   cat:'Noodles', grp:'Phad Thai', price:8.50},
-  {id:312,num:'31', name:'Phad Thai — Chicken',                cat:'Noodles', grp:'Phad Thai', price:7.95},
-  {id:812,num:'31', name:'Phad Thai — Pork',                   cat:'Noodles', grp:'Phad Thai', price:7.95},
-  {id:313,num:'31', name:'Phad Thai — Veg (V)',                cat:'Noodles', grp:'Phad Thai', price:6.95},
-  {id:32, num:'32', name:'Plain Noodles (V)',                       cat:'Noodles',                     price:4.95},
-
-  {id:33, num:'33', name:'Steamed Jasmine Rice (V)',               cat:'Rice / Chips', price:2.95},
-  {id:34, num:'34', name:'Egg Fried Rice (V)',                     cat:'Rice / Chips', price:3.50},
-  {id:35, num:'35', name:'Coconut Rice (V)',                       cat:'Rice / Chips', price:3.50},
-  {id:36, num:'36', name:'Vegetable Fried Rice (V)',               cat:'Rice / Chips', price:7.50},
-  {id:37, num:'37', name:'Chicken Fried Rice',                     cat:'Rice / Chips', price:7.95},
-  {id:38, num:'38', name:'King Prawn Fried Rice',                  cat:'Rice / Chips', price:8.50},
-  {id:39, num:'39', name:'Sticky Rice',                            cat:'Rice / Chips', price:3.95},
-  {id:40, num:'40', name:'Chips (V)',                              cat:'Rice / Chips', price:3.00},
-
-  {id:41, num:'41', name:'Chicken Nuggets & Chips (x6)',           cat:'Kids', price:4.95},
-  {id:42, num:'42', name:'Crispy Chicken Fillet & Chips (x4)',     cat:'Kids', price:4.95},
-
-  {id:43, num:'—', name:'7up',       cat:'Soft Drinks', price:1.30},
-  {id:44, num:'—', name:'Coke',      cat:'Soft Drinks', price:1.30},
-  {id:45, num:'—', name:'Diet Coke', cat:'Soft Drinks', price:1.30},
-  {id:46, num:'—', name:'Fanta',     cat:'Soft Drinks', price:1.30},
-
-  {id:50, num:'A', name:'Set Menu A — per person (min 2)', cat:'Set Menus', price:18.95},
-  {id:51, num:'B', name:'Set Menu B — per person (min 2)', cat:'Set Menus', price:19.95},
-
-  {id:61,  num:'—', name:'Custom Item',          cat:'Misc', price:0.00, custom:true},
-  {id:60,  num:'—', name:'Any Main Dish Sauce',  cat:'Misc', price:4.50},
-  {id:62,  num:'—', name:'Tom Yum / Kha - Chicken', cat:'Misc', price:7.95},
-  {id:63,  num:'—', name:'Tom Yum / Kha - Prawn',   cat:'Misc', price:8.50},
-  {id:64,  num:'—', name:'Satay Sauce Dip',       cat:'Misc', price:0.50},
-  {id:65,  num:'—', name:'Sweet Chilli Sauce Dip',cat:'Misc', price:0.50},
-  {id:66,  num:'—', name:'Hoisin Sauce Dip',      cat:'Misc', price:0.50},
-  {id:67,  num:'—', name:'Sirarcha Sauce',         cat:'Misc', price:0.50}
+  {id:1, num:"1", name:"Prawn Crackers", cat:"Starters", price:3.00},
+  {id:2, num:"2", name:"Chicken on Toast", cat:"Starters", price:6.5},
+  {id:3, num:"3", name:"Chicken Satay", cat:"Starters", price:6.5},
+  {id:4, num:"4", name:"Prawn Tempura", cat:"Starters", price:6.95},
+  {id:5, num:"5", name:"Fish Cakes", cat:"Starters", price:6.5},
+  {id:6, num:"6", name:"Spring Roll (V)", cat:"Starters", price:5.95},
+  {id:7, num:"7", name:"Pork Dumpling Savoury", cat:"Starters", price:6.95},
+  {id:8, num:"8", name:"Vegetable Tempura (V)", cat:"Starters", price:5.95},
+  {id:9, num:"9", name:"Duck Spring Rolls", cat:"Starters", price:6.95},
+  {id:10, num:"10", name:"Crispy Wanton", cat:"Starters", price:5.95},
+  {id:11, num:"11", name:"Gadoog Moo Yang", cat:"Starters", price:6.95},
+  {id:12, num:"12", name:"Gung Hom Pa", cat:"Starters", price:6.95},
+  {id:13, num:"13", name:"Chicken Wing", cat:"Starters", price:6.5},
+  {id:131, num:"13a", name:"Salt & Pepper Squid", cat:"Starters", price:6.95},
+  {id:14, num:"14", name:"Sharing Hong's Thai", cat:"Starters", price:12.95},
+  {id:15, num:"15", name:"Thai Green Curry \u2014 Prawn", cat:"Curry", grp:"#15 Thai Green Curry", price:10.5},
+  {id:151, num:"15", name:"Thai Green Curry \u2014 Chicken", cat:"Curry", grp:"#15 Thai Green Curry", price:9.5},
+  {id:651, num:"15", name:"Thai Green Curry \u2014 Pork", cat:"Curry", grp:"#15 Thai Green Curry", price:9.5},
+  {id:152, num:"15", name:"Thai Green Curry \u2014 Beef", cat:"Curry", grp:"#15 Thai Green Curry", price:10.5},
+  {id:153, num:"15", name:"Thai Green Curry \u2014 Veg (V)", cat:"Curry", grp:"#15 Thai Green Curry", price:8.95},
+  {id:16, num:"16", name:"Thai Red Curry \u2014 Prawn", cat:"Curry", grp:"#16 Thai Red Curry", price:10.5},
+  {id:161, num:"16", name:"Thai Red Curry \u2014 Chicken", cat:"Curry", grp:"#16 Thai Red Curry", price:9.5},
+  {id:661, num:"16", name:"Thai Red Curry \u2014 Pork", cat:"Curry", grp:"#16 Thai Red Curry", price:9.5},
+  {id:162, num:"16", name:"Thai Red Curry \u2014 Beef", cat:"Curry", grp:"#16 Thai Red Curry", price:10.5},
+  {id:163, num:"16", name:"Thai Red Curry \u2014 Veg (V)", cat:"Curry", grp:"#16 Thai Red Curry", price:8.95},
+  {id:17, num:"17", name:"Massaman Curry \u2014 Prawn", cat:"Curry", grp:"#17 Massaman Curry", price:10.5},
+  {id:171, num:"17", name:"Massaman Curry \u2014 Chicken", cat:"Curry", grp:"#17 Massaman Curry", price:9.5},
+  {id:671, num:"17", name:"Massaman Curry \u2014 Pork", cat:"Curry", grp:"#17 Massaman Curry", price:9.5},
+  {id:172, num:"17", name:"Massaman Curry \u2014 Beef", cat:"Curry", grp:"#17 Massaman Curry", price:10.5},
+  {id:173, num:"17", name:"Massaman Curry \u2014 Veg (V)", cat:"Curry", grp:"#17 Massaman Curry", price:8.95},
+  {id:18, num:"18", name:"Paneang Curry \u2014 Prawn", cat:"Curry", grp:"Paneang Curry", price:10.5},
+  {id:181, num:"18", name:"Paneang Curry \u2014 Chicken", cat:"Curry", grp:"Paneang Curry", price:9.5},
+  {id:681, num:"18", name:"Paneang Curry \u2014 Pork", cat:"Curry", grp:"Paneang Curry", price:9.5},
+  {id:182, num:"18", name:"Paneang Curry \u2014 Beef", cat:"Curry", grp:"Paneang Curry", price:10.5},
+  {id:183, num:"18", name:"Paneang Curry \u2014 Veg (V)", cat:"Curry", grp:"Paneang Curry", price:8.95},
+  {id:19, num:"19", name:"Yellow Curry \u2014 Prawn", cat:"Curry", grp:"Yellow Curry", price:10.5},
+  {id:191, num:"19", name:"Yellow Curry \u2014 Chicken", cat:"Curry", grp:"Yellow Curry", price:9.5},
+  {id:691, num:"19", name:"Yellow Curry \u2014 Pork", cat:"Curry", grp:"Yellow Curry", price:9.5},
+  {id:192, num:"19", name:"Yellow Curry \u2014 Beef", cat:"Curry", grp:"Yellow Curry", price:10.5},
+  {id:193, num:"19", name:"Yellow Curry \u2014 Veg (V)", cat:"Curry", grp:"Yellow Curry", price:8.95},
+  {id:20, num:"20", name:"Pad Khing \u2014 Duck", cat:"Stir Fried", grp:"Pad Khing", price:11.5},
+  {id:201, num:"20", name:"Pad Khing \u2014 Prawn", cat:"Stir Fried", grp:"Pad Khing", price:10.5},
+  {id:901, num:"20", name:"Pad Khing \u2014 Beef", cat:"Stir Fried", grp:"Pad Khing", price:10.5},
+  {id:202, num:"20", name:"Pad Khing \u2014 Chicken", cat:"Stir Fried", grp:"Pad Khing", price:9.5},
+  {id:702, num:"20", name:"Pad Khing \u2014 Pork", cat:"Stir Fried", grp:"Pad Khing", price:9.5},
+  {id:203, num:"20", name:"Pad Khing \u2014 Veg (V)", cat:"Stir Fried", grp:"Pad Khing", price:8.95},
+  {id:21, num:"21", name:"Pad Gra Pao \u2014 Duck", cat:"Stir Fried", grp:"Pad Gra Pao", price:11.5},
+  {id:211, num:"21", name:"Pad Gra Pao \u2014 Prawn", cat:"Stir Fried", grp:"Pad Gra Pao", price:10.5},
+  {id:212, num:"21", name:"Pad Gra Pao \u2014 Chicken", cat:"Stir Fried", grp:"Pad Gra Pao", price:9.5},
+  {id:712, num:"21", name:"Pad Gra Pao \u2014 Pork", cat:"Stir Fried", grp:"Pad Gra Pao", price:9.5},
+  {id:213, num:"21", name:"Pad Gra Pao \u2014 Beef", cat:"Stir Fried", grp:"Pad Gra Pao", price:10.5},
+  {id:214, num:"21", name:"Pad Gra Pao \u2014 Veg (V)", cat:"Stir Fried", grp:"Pad Gra Pao", price:8.95},
+  {id:22, num:"22", name:"Cashew Nut \u2014 Prawn", cat:"Stir Fried", grp:"Cashew Nut Stir Fry", price:10.5},
+  {id:221, num:"22", name:"Cashew Nut \u2014 Chicken", cat:"Stir Fried", grp:"Cashew Nut Stir Fry", price:9.5},
+  {id:721, num:"22", name:"Cashew Nut \u2014 Pork", cat:"Stir Fried", grp:"Cashew Nut Stir Fry", price:9.5},
+  {id:222, num:"22", name:"Cashew Nut \u2014 Beef", cat:"Stir Fried", grp:"Cashew Nut Stir Fry", price:10.5},
+  {id:223, num:"22", name:"Cashew Nut \u2014 Veg (V)", cat:"Stir Fried", grp:"Cashew Nut Stir Fry", price:8.95},
+  {id:23, num:"23", name:"Mixed Veg Stir Fry (V)", cat:"Stir Fried", price:8.95},
+  {id:24, num:"24", name:"Sweet & Sour \u2014 Prawn", cat:"Stir Fried", grp:"Sweet & Sour", price:10.5},
+  {id:241, num:"24", name:"Sweet & Sour \u2014 Chicken", cat:"Stir Fried", grp:"Sweet & Sour", price:9.5},
+  {id:741, num:"24", name:"Sweet & Sour \u2014 Pork", cat:"Stir Fried", grp:"Sweet & Sour", price:9.5},
+  {id:242, num:"24", name:"Sweet & Sour \u2014 Beef", cat:"Stir Fried", grp:"Sweet & Sour", price:10.5},
+  {id:243, num:"24", name:"Sweet & Sour \u2014 Veg (V)", cat:"Stir Fried", grp:"Sweet & Sour", price:8.95},
+  {id:25, num:"25", name:"Oyster Sauce \u2014 Prawn", cat:"Stir Fried", grp:"Oyster Sauce", price:10.5},
+  {id:251, num:"25", name:"Oyster Sauce \u2014 Chicken", cat:"Stir Fried", grp:"Oyster Sauce", price:9.5},
+  {id:751, num:"25", name:"Oyster Sauce \u2014 Pork", cat:"Stir Fried", grp:"Oyster Sauce", price:9.5},
+  {id:252, num:"25", name:"Oyster Sauce \u2014 Beef", cat:"Stir Fried", grp:"Oyster Sauce", price:10.5},
+  {id:253, num:"25", name:"Oyster Sauce \u2014 Veg (V)", cat:"Stir Fried", grp:"Oyster Sauce", price:8.95},
+  {id:26, num:"26", name:"Tamarind Duck", cat:"Duck", price:11.5},
+  {id:27, num:"27", name:"Red Duck Curry", cat:"Duck", price:11.5},
+  {id:28, num:"28", name:"Sea Bass Pad Khing", cat:"Fish", price:12.5},
+  {id:29, num:"29", name:"Sea Bass Pad Gra Pao", cat:"Fish", price:12.5},
+  {id:30, num:"30", name:"Steamed Sea Bass Fillet", cat:"Fish", price:12.5},
+  {id:31, num:"31", name:"Phad Thai \u2014 Prawn", cat:"Noodles", grp:"Phad Thai", price:8.5},
+  {id:311, num:"31", name:"Phad Thai \u2014 Beef", cat:"Noodles", grp:"Phad Thai", price:8.5},
+  {id:312, num:"31", name:"Phad Thai \u2014 Chicken", cat:"Noodles", grp:"Phad Thai", price:7.95},
+  {id:812, num:"31", name:"Phad Thai \u2014 Pork", cat:"Noodles", grp:"Phad Thai", price:7.95},
+  {id:313, num:"31", name:"Phad Thai \u2014 Veg (V)", cat:"Noodles", grp:"Phad Thai", price:6.95},
+  {id:32, num:"32", name:"Plain Noodles (V)", cat:"Noodles", price:4.95},
+  {id:33, num:"33", name:"Steamed Jasmine Rice (V)", cat:"Rice / Chips", price:2.95},
+  {id:34, num:"34", name:"Egg Fried Rice (V)", cat:"Rice / Chips", price:3.5},
+  {id:35, num:"35", name:"Coconut Rice (V)", cat:"Rice / Chips", price:3.5},
+  {id:36, num:"36", name:"Vegetable Fried Rice (V)", cat:"Rice / Chips", price:7.5},
+  {id:37, num:"37", name:"Chicken Fried Rice", cat:"Rice / Chips", price:7.95},
+  {id:38, num:"38", name:"King Prawn Fried Rice", cat:"Rice / Chips", price:8.5},
+  {id:39, num:"39", name:"Sticky Rice", cat:"Rice / Chips", price:3.95},
+  {id:40, num:"40", name:"Chips (V)", cat:"Rice / Chips", price:3.00},
+  {id:41, num:"41", name:"6 Chicken Nuggets & Chips", cat:"Kids", price:4.95},
+  {id:42, num:"42", name:"4 Crispy Chicken Fillet & Chips", cat:"Kids", price:4.95},
+  {id:43, num:"\u2014", name:"7up", cat:"Soft Drinks", price:1.3},
+  {id:44, num:"\u2014", name:"Coke", cat:"Soft Drinks", price:1.3},
+  {id:45, num:"\u2014", name:"Diet Coke", cat:"Soft Drinks", price:1.3},
+  {id:46, num:"\u2014", name:"Fanta", cat:"Soft Drinks", price:1.3},
+  {id:50, num:"A", name:"Set Menu A  (min 2 people)", cat:"Set Menus", price:37.9},
+  {id:51, num:"B", name:"Set Menu B (min 2 people)", cat:"Set Menus", price:39.9},
+  {id:61, num:"\u2014", name:"Custom Item", cat:"Misc", price:0.00},
+  {id:60, num:"\u2014", name:"Any Main Dish Sauce", cat:"Misc", price:4.5},
+  {id:62, num:"\u2014", name:"Tom Yum / Kha - Chicken", cat:"Misc", price:7.95},
+  {id:63, num:"\u2014", name:"Tom Yum / Kha - Prawn", cat:"Misc", price:8.5},
+  {id:64, num:"\u2014", name:"Satay Sauce Dip", cat:"Misc", price:0.5},
+  {id:65, num:"\u2014", name:"Sweet Chilli Sauce Dip", cat:"Misc", price:0.5},
+  {id:66, num:"\u2014", name:"Hoisin Sauce Dip", cat:"Misc", price:0.5},
+  {id:67, num:"\u2014", name:"Sirarcha Sauce", cat:"Misc", price:0.5}
 ];
 
 var DEF_ZONES = [
@@ -1883,6 +1873,7 @@ function QueueView(props) {
   var onPrint = props.onPrint;
   var onPrintAll = props.onPrintAll;
   var onClearQueue = props.onClearQueue;
+  var onRecall = props.onRecall;
   var menuItems = props.menuItems;
   var setTab = props.setTab;
 
@@ -1993,6 +1984,7 @@ function QueueView(props) {
                 !isEditing && h(React.Fragment, null,
                   h('button', {className:'mbtn', onClick:function(){ onPrint(ord); }, style:{padding:'6px 11px',borderRadius:8,border:'none',background:C.accent,color:C.bg,cursor:'pointer',fontSize:12,fontWeight:800}}, '🖨️ Print'),
                   h('button', {className:'mbtn', onClick:function(){ startEdit(ord); }, style:{padding:'6px 10px',borderRadius:8,border:'1px solid ' + C.border,background:'transparent',color:C.muted,cursor:'pointer',fontSize:12,fontWeight:700}}, '✏️ Edit'),
+                  h('button', {className:'mbtn', onClick:function(){ if(onRecall) onRecall(ord); }, style:{padding:'6px 10px',borderRadius:8,border:'1px solid ' + C.accent + '80',background:'transparent',color:C.accent,cursor:'pointer',fontSize:12,fontWeight:700}}, '↩️ Recall'),
                   h('button', {className:'mbtn', onClick:function(){ removeFromQueue(ord.id); }, style:{padding:'6px 10px',borderRadius:8,border:'1px solid ' + C.danger + '60',background:'transparent',color:C.danger,cursor:'pointer',fontSize:12,fontWeight:700}}, '🗑️')
                 )
               )
@@ -3025,6 +3017,33 @@ function App() {
     onClearQueue:function(){
       if(window.confirm('Clear all ' + queue.length + ' orders from the queue? This cannot be undone.'))
         setQueue([]);
+    },
+    onRecall:function(ord){
+      if (order.length && !window.confirm('Replace the current order with this recalled one?')) return;
+      var copiedItems = JSON.parse(JSON.stringify(ord.items || [])).map(function(it){
+        return Object.assign({}, it, {id: (it.custom ? Date.now()+Math.random() : it.id)});
+      });
+      setOrder(copiedItems);
+      setCustomer({
+        name: ord.customer ? (ord.customer.name || '') : '',
+        phone: ord.customer ? (ord.customer.phone || '') : '',
+        address: ord.customer ? (ord.customer.address || '') : '',
+        notes: ord.customer ? (ord.customer.notes || '') : ''
+      });
+      setOrderType(ord.orderType || 'collection');
+      setPaymentType(ord.paymentType || null);
+      setScheduleType(ord.scheduleType || 'asap');
+      setScheduleTime(ord.scheduleTime || '');
+      if (ord.deliveryZone) {
+        var amt = parseCharge(ord.deliveryZone);
+        if (amt > 0) setSelZone(amt.toFixed(2));
+      } else {
+        setSelZone(null);
+      }
+      setDiscount({type:null, pct:10, custom:''});
+      setPriceOverride('');
+      setDiscountPanelOpen(false);
+      setTab(isDesktop ? 'order' : 'menu');
     },
     menuItems:menuItems,setTab:setTab};
   var editorProps = {menuItems:menuItems,newItem:newItem,setNewItem:setNewItem,editItem:editItem,setEditItem:setEditItem,addItem:addItem,delItem:delItem,saveItem:saveItem,smInp:smInp,resetMenu:resetMenu,reorderMenuItem:reorderMenuItem};
