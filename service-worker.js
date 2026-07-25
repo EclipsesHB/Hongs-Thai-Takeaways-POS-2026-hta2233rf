@@ -4,7 +4,7 @@
    it runs fully offline after first load.
    ────────────────────────────────────────────────────────────────────────── */
 
-const CACHE_NAME = 'hongs-pos-v2';
+const CACHE_NAME = 'hongs-pos-v3';
 
 /* Files to pre-cache on install */
 const PRECACHE_URLS = [
